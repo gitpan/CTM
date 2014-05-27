@@ -38,7 +38,7 @@ use Time::Local;
 
 #----> ** variables de classe **
 
-our $VERSION = 0.16;
+our $VERSION = 0.161;
 
 #----> ** fonctions privees **
 
@@ -121,7 +121,7 @@ Pour plus de details, voir la documention POD de CTM::ReadEM.
 
 =head1 DEPENDANCES
 
-Carp, Hash::Util
+Carp, Hash::Util, Time::Local
 
 =head1 NOTES
 

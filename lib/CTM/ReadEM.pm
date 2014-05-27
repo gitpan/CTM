@@ -34,7 +34,7 @@ use warnings;
 
 use base qw/CTM::Base Exporter/;
 
-use CTM::ReadEM::_workOnBIMServices 0.16;
+use CTM::ReadEM::_workOnBIMServices 0.161;
 
 use Carp;
 use Hash::Util;
@@ -45,7 +45,7 @@ use DBI;
 #----> ** variables de classe **
 
 our $AUTOLOAD;
-our $VERSION = 0.16;
+our $VERSION = 0.161;
 our @EXPORT_OK = qw/
     $VERSION
     getStatusColorForService

@@ -23,13 +23,15 @@ N.B : pour plus d'informations liées aux termes employés dans ce fichier, voir l
 - 0.14 (STABLE) :
     * 09/05/2014 - module CTM::EM::BIM::ServicesAPI::Common fonctionnel. Contient les fonctions/méthodes _setObjProperty(), _myErrorMessage(), getProperty(), setPublicProperty() et clearError().
     * 09/05/2014 - heritage de certaines fonctions pour les classes CTM::EM::BIM::ServicesAPI et _WorkOnServices depuis CTM::EM::BIM::ServicesAPI::Common.
-    * 20/05/2014 - ajout du parametre "verbose" a la methode newSession().
-    * 20/05/2014 - ajout de la methode refresh() a la classe _WorkOnServices.
+    * 20/05/2014 - ajout du parametre "verbose" à la methode newSession().
+    * 20/05/2014 - ajout de la methode refresh() à la classe _WorkOnServices.
 - 0.15 (STABLE) :
     * 22/05/2014 - refonte de l'espace de nom pour les modules CTM::* (CTM::Base, CTM::ReadEM, CTM::ReadEM::_workOnBIMServices).
     * 22/05/2014 - certaines fonctions privées deviennent accessibles (_myOsIsUnix(), ...).
-- 0.16 (STABLE) :
-    * 26/05/2014 - ajout du paramètre 'forStatus' a la méthode getCurrentServices().
+- 0.161 (STABLE) :
+    * 26/05/2014 - ajout du paramètre 'forStatus' à la méthode getCurrentServices().
     * 26/05/2014 - POD revue pour l'upload des modules sur le CPAN.
+- 0.161 (STABLE) :
+    * 26/05/2014 - Correction de quelques bugs relatifs à la méthode $_setObjProperty->().
 - 0.1x :
     * ? - prise en compte du champ 'DAYTIME' avec ses variations (+/-) dans la fonction privée $_calculStartEndDayTimeInPosixTimestamp->().

@@ -36,7 +36,7 @@ use Hash::Util;
 #----> ** variables de classe **
 
 our $AUTOLOAD;
-our $VERSION = 0.16;
+our $VERSION = 0.161;
 
 #----> ** fonctions privees **
 
