@@ -1,0 +1,35 @@
+CHANGES
+
+N.B : pour plus d'informations liées aux termes employés dans ce fichier, voir la documentation POD intégrée au module (perldoc CTM::ReadEM).
+
+- 0.09 et moins (STABLE) :
+    * < 23/03/2014 - versions instables, base du module en développement.
+- 0.10 (STABLE) :
+    * 24/03/2014 - version stable, toutes les méthodes fonctionnent. Le champ 'DAYTIME' n'est pas pris en compte.
+- 0.11 (STABLE) :
+    * 25/03/2014 - support de Control-M EM v6.
+    * 25/03/2014 - mise en place de la classe _BIMServices dont le constructeur est une méthode de Control-M EM::BIM.
+    * 31/03/2014 - méthodes de la classe 'soeur' _BIMServices misent en place.
+    * 07/04/2014 - modifications des méthodes liées à la classe Control-M EM::BIM et aux services : la récupération des services se fait désormais dynamiquement via l'active net.
+    * 17/04/2014 - refonte de la doc POD du module et d'une partie de la gestion des erreurs via Carp.
+    * 23/04/2014 - gestion des jobs supprimés du plan via la clé 'delete_flag' (booleen) et avec le paramètre 'handleDeletedJobs' de la méthode getCurrentServices() et de ses dérivés.
+- 0.12 (STABLE) :
+    * 24/04/2014 - renommage de la classe _BIMServices en _WorkOnServices.
+    * 24/04/2014 - refonte de l'espace de nom du module (Control-M EM::BIM -> CTM::EM::BIM::ServicesAPI) et de son nom (BIM.pm -> ServicesAPI.pm).
+- 0.13 (STABLE) :
+    * 07/05/2014 - ajout de la méthode getSOAPEnvelope() à la classe _WorkOnServices.
+    * 07/05/2014 - securisation des objets via Hash::Util et ajout d'un mutateur (setPublicProperty()) pour les proprietes publiques des objets.
+    * 09/05/2014 - ajout de la methode getProperty().
+- 0.14 (STABLE) :
+    * 09/05/2014 - module CTM::EM::BIM::ServicesAPI::Common fonctionnel. Contient les fonctions/méthodes _setObjProperty(), _myErrorMessage(), getProperty(), setPublicProperty() et clearError().
+    * 09/05/2014 - heritage de certaines fonctions pour les classes CTM::EM::BIM::ServicesAPI et _WorkOnServices depuis CTM::EM::BIM::ServicesAPI::Common.
+    * 20/05/2014 - ajout du parametre "verbose" a la methode newSession().
+    * 20/05/2014 - ajout de la methode refresh() a la classe _WorkOnServices.
+- 0.15 (STABLE) :
+    * 22/05/2014 - refonte de l'espace de nom pour les modules CTM::* (CTM::Base, CTM::ReadEM, CTM::ReadEM::_workOnBIMServices).
+    * 22/05/2014 - certaines fonctions privées deviennent accessibles (_myOsIsUnix(), ...).
+- 0.16 (STABLE) :
+    * 26/05/2014 - ajout du paramètre 'forStatus' a la méthode getCurrentServices().
+    * 26/05/2014 - POD revue pour l'upload des modules sur le CPAN.
+- 0.1x :
+    * ? - prise en compte du champ 'DAYTIME' avec ses variations (+/-) dans la fonction privée $_calculStartEndDayTimeInPosixTimestamp->().
