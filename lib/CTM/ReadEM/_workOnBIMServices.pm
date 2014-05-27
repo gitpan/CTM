@@ -35,8 +35,7 @@ use Hash::Util;
 
 #----> ** variables de classe **
 
-our $AUTOLOAD;
-our $VERSION = 0.161;
+our $VERSION = 0.162;
 
 #----> ** fonctions privees **
 
@@ -167,12 +166,8 @@ sub getProblematicsJobs {
 
 #-> Perl BuiltIn
 
-sub AUTOLOAD {
-    my $self = shift;
-    no strict qw/refs/;
-    (my $called = $AUTOLOAD) =~ s/.*:://;
-    Carp::croak("'" . $AUTOLOAD . "' : la methode '" . $called . "()' n'existe pas.") unless (exists $self->{$called});
-    return $self->{$called};
+BEGIN {
+    *AUTOLOAD = \&CTM::Base::AUTOLOAD;
 }
 
 sub DESTROY {
@@ -187,20 +182,20 @@ __END__
 
 =head1 NOM
 
-CTM::ReadEM::_workOnBIMServices
+C<CTM::ReadEM::_workOnBIMServices>
 
 =head1 SYNOPSIS
 
-Module du constructeur CTM::ReadEM::workOnCurrentServices().
+Module du constructeur C<CTM::ReadEM::workOnCurrentServices()>.
 Pour plus de details, voir la documention POD de CTM::ReadEM.
 
 =head1 DEPENDANCES
 
-CTM::Base, CTM::ReadEM, Carp, Hash::Util
+C<CTM::Base>, C<CTM::ReadEM>, C<Carp>, C<Hash::Util>
 
 =head1 NOTES
 
-Ce module est dedie au module CTM::ReadEM.
+Ce module est dedie au module C<CTM::ReadEM>.
 
 =head1 AUTEUR
 

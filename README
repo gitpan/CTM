@@ -5,3 +5,4 @@ Installation du module :
 - perl Makefile.PL
 - make
 - make install
+- make clean

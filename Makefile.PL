@@ -33,4 +33,7 @@ WriteMakefile(
         'POSIX'  => 0,
         'DBI'  => 0
     },
+    'clean' => {
+        'FILES' => 'blib/* pm_to_blib MYMETA*'
+    }
 );

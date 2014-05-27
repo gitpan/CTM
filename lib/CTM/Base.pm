@@ -38,7 +38,8 @@ use Time::Local;
 
 #----> ** variables de classe **
 
-our $VERSION = 0.161;
+our $VERSION = 0.162;
+our $AUTOLOAD;
 
 #----> ** fonctions privees **
 
@@ -102,6 +103,16 @@ sub clearError {
     return shift->$_setObjProperty('_errorMessage', undef);
 }
 
+#-> Perl BuiltIn
+
+sub AUTOLOAD {
+    my $self = shift;
+    no strict qw/refs/;
+    (my $called = $AUTOLOAD) =~ s/.*:://;
+    Carp::croak("'" . $AUTOLOAD . "' : la methode '" . $called . "()' n'existe pas.") unless (exists $self->{$called});
+    return $self->{$called};
+}
+
 1;
 
 #-> END
@@ -112,20 +123,20 @@ __END__
 
 =head1 NOM
 
-CTM::Base
+C<CTM::Base>
 
 =head1 SYNOPSIS
 
 "Classe abstraite" des modules de CTM::*.
-Pour plus de details, voir la documention POD de CTM::ReadEM.
+Pour plus de details, voir la documention POD de C<CTM::ReadEM>.
 
 =head1 DEPENDANCES
 
-Carp, Hash::Util, Time::Local
+C<Carp>, C<Hash::Util>, C<Time::Local>
 
 =head1 NOTES
 
-Ce module est dedie au module CTM::ReadEM.
+Ce module est dedie au module C<CTM::ReadEM>.
 
 =head1 AUTEUR
 

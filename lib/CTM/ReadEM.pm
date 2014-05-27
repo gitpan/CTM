@@ -20,7 +20,7 @@
 #   - 'Exporter'
 #   - 'POSIX'
 #   - 'DBI'
-#   - 'DBD::(Pg|mysql|Oracle|Sybase|ODBC)'
+#   - 'DBD::?'
 #==========================================================================================================
 
 #-> BEGIN
@@ -34,7 +34,7 @@ use warnings;
 
 use base qw/CTM::Base Exporter/;
 
-use CTM::ReadEM::_workOnBIMServices 0.161;
+use CTM::ReadEM::_workOnBIMServices 0.162;
 
 use Carp;
 use Hash::Util;
@@ -44,8 +44,7 @@ use DBI;
 
 #----> ** variables de classe **
 
-our $AUTOLOAD;
-our $VERSION = 0.161;
+our $VERSION = 0.162;
 our @EXPORT_OK = qw/
     $VERSION
     getStatusColorForService
@@ -496,12 +495,8 @@ sub getSessionIsConnected {
 
 #-> Perl BuiltIn
 
-sub AUTOLOAD {
-    my $self = shift;
-    no strict qw/refs/;
-    (my $called = $AUTOLOAD) =~ s/.*:://;
-    Carp::croak("'" . $AUTOLOAD . "' : la methode '" . $called . "()' n'existe pas.") unless (exists $self->{$called});
-    return $self->{$called};
+BEGIN {
+    *AUTOLOAD = \&CTM::Base::AUTOLOAD;
 }
 
 sub DESTROY {
@@ -529,9 +524,9 @@ Voir la section EXEMPLES.
 
 =head1 DEPENDANCES
 
-CTM::Base, CTM::ReadEM::_workOnBIMServices, Carp, Hash::Util, Exporter, Time::Local, POSIX, DBI, /^DBD::(Pg|mysql|Oracle|Sybase|ODBC)$/
+C<CTM::Base>, C<CTM::ReadEM::_workOnBIMServices>, C<Carp>, C<Hash::Util>, C<Exporter>, C<Time::Local>, C<POSIX>, C<DBI>, C<DBD::?>
 
-=head1 PROPRIETES PUBLIQUES (CTM::ReadEM)
+=head1 PROPRIETES PUBLIQUES (C<CTM::ReadEM>)
 
 =over
 
@@ -577,7 +572,7 @@ Ce parametre accepte un booleen. Faux par defaut.
 
 =back
 
-=head1 FONCTIONS PUBLIQUES (CTM::ReadEM)
+=head1 FONCTIONS PUBLIQUES (C<CTM::ReadEM>)
 
 =over
 
@@ -591,11 +586,11 @@ Retourne 0 si le parametre fourni n'est pas correct (nombre non repertorie).
 
 =item - (*) - I<getNbSessionsCreated()>
 
-Retourne le nombre d instances en cours pour le module CTM::ReadEM.
+Retourne le nombre d instances en cours pour le module C<CTM::ReadEM>.
 
 =item - (*) - I<getNbSessionsConnected()>
 
-Retourne le nombre d instances en cours et connectees a la base du Control-M EM pour le module CTM::ReadEM.
+Retourne le nombre d instances en cours et connectees a la base du Control-M EM pour le module C<CTM::ReadEM>.
 
 =back
 
@@ -605,11 +600,11 @@ Retourne le nombre d instances en cours et connectees a la base du Control-M EM 
 
 =item - (*) - my $session = CTM::ReadEM->I<newSession()>
 
-Cette methode est le constructeur du module CTM::ReadEM. C<CTM::ReadEM->new()> est un equivalent.
+Cette methode est le constructeur du module C<CTM::ReadEM>. C<CTM::ReadEM-E<gt>new()> est un equivalent.
 
 Les parametres disponibles sont "ctmEMVersion", "DBMSType", "DBMSAddress", "DBMSPort", "DBMSInstance", "DBMSUser", "DBMSPassword", "DBMSTimeout" et "verbose" (booleen)
 
-Pour information, le destructeur C<DESTROY()> est appele lorsque toutes les references a l'objet instancie ont ete detruites (C<undef $session;> par exemple).
+Pour information, le destructeur C<DESTROY> est appele lorsque toutes les references a l'objet instancie ont ete detruites (C<undef $session;> par exemple).
 
 Retourne toujours un objet.
 
@@ -621,7 +616,7 @@ Retourne 1 si la connexion a reussi sinon 0.
 
 =item - (*) - $session->I<disconnectFromDB()>
 
-Permet de se deconnecter de la base du Control-M EM mais elle n'apelle pas le destructeur C<DESTROY()>.
+Permet de se deconnecter de la base du Control-M EM mais elle n'apelle pas le destructeur C<DESTROY>.
 
 Retourne 1 si la connexion a reussi sinon 0.
 
@@ -645,7 +640,7 @@ Retourne 0 si la methode a echouee.
 
 Retourne le nombre de services actuellement en cours dans le BIM.
 
-Derive de la methode C<$session->getCurrentServices()>, elle "herite" donc de ses parametres.
+Derive de la methode C<$session-E<gt>getCurrentServices()>, elle "herite" donc de ses parametres.
 
 Retourne C<undef> si la methode a echouee.
 
@@ -653,11 +648,11 @@ Retourne C<undef> si la methode a echouee.
 
 =item - (BIM) - my $workOnServices = $session->I<workOnCurrentServices()>
 
-Derive de la methode C<$session->getCurrentServices()>, elle "herite" donc de ses parametres.
+Derive de la methode C<$session-E<gt>getCurrentServices()>, elle "herite" donc de ses parametres.
 
 Retourne toujours un objet.
 
-Fonctionne de la meme maniere que la methode C<$session->getCurrentServices()> mais elle est surtout le constructeur du module C<CTM::ReadEM::_workOnBIMServices> qui met a disposition les methodes suivantes :
+Fonctionne de la meme maniere que la methode C<$session-E<gt>getCurrentServices()> mais elle est surtout le constructeur du module C<CTM::ReadEM::_workOnBIMServices> qui met a disposition les methodes suivantes :
 
 =item - (BIM) - $workOnServices->I<refresh()>
 
@@ -719,7 +714,7 @@ Leve une exception (C<carp()>) si c'est une propriete privee ou si celle-ci n'ex
 
 Retourne la derniere erreur generee (plusieurs erreurs peuvent etre presentes dans la meme chaine de caracteres retournee).
 
-Retourne C<undef> si il n'y a pas d'erreur ou si la derniere a ete nettoyee via la methode C<$obj->clearError()>.
+Retourne C<undef> si il n'y a pas d'erreur ou si la derniere a ete nettoyee via la methode C<$obj-E<gt>clearError()>.
 
 Une partie des erreurs sont fatales (notamment le fait de ne pas correctement utiliser les methodes/fonctions)).
 
@@ -840,7 +835,7 @@ Retourne toujours 1.
 
 =item - Certaines fonctions normalements privees sont disponibles pour l'utilisateur mais ne sont pas documentees et peuvent etre fatales (pas de prototypage, pas de gestion des exceptions, ...).
 
-=item - Les versions < 0.20 ne permettent de ne consulter que les services du BIM du Control-M EM. Le reste (Viewpoint, GAS, ...) viendra ensuite.
+=item - Les versions < 0.16 ne permettent de ne consulter que les services du BIM du Control-M EM. Le reste (Viewpoint (v0.18+), GAS (v0.17+), ...) viendra ensuite.
 
 =item - Base Moose prevu pour la 0.20.
 

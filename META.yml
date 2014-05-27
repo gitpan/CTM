@@ -24,4 +24,4 @@ requires:
   Hash::Util: '0'
   POSIX: '0'
   Time::Local: '0'
-version: '0.161'
+version: '0.162'
