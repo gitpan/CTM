@@ -37,9 +37,9 @@ use base qw/
     CTM::Base
 /;
 
-use CTM::ReadEM::_workOnBIMServices 0.17;
-use CTM::ReadEM::_workOnAlarms 0.17;
-use CTM::ReadEM::_workOnExceptionAlerts 0.17;
+use CTM::ReadEM::_workOnBIMServices 0.171;
+use CTM::ReadEM::_workOnAlarms 0.171;
+use CTM::ReadEM::_workOnExceptionAlerts 0.171;
 
 use Carp qw/
     carp
@@ -58,7 +58,7 @@ use DBI;
 
 #----> ** variables de classe **
 
-our $VERSION = 0.17;
+our $VERSION = 0.171;
 our @EXPORT_OK = qw/
     $VERSION
     getStatusColorForService
@@ -67,6 +67,9 @@ our @EXPORT_OK = qw/
     getNbSessionsCreated
     getNbSessionsConnected
 /;
+our %EXPORT_TAGS = (
+    all => \@EXPORT_OK
+);
 
 my %_sessionsState = (
     nbSessionsInstanced => 0,
@@ -689,13 +692,13 @@ Cette fonction permet de convertir le champ "status_to" de la table de hachage g
 
 Retourne 0 si la valeur du parametre fourni n'est pas reconnu.
 
-=item - (EA) - I<getSeverityForAlarms()>
+=item - (EA) - I<getSeverityForExceptionAlerts()>
 
 Cette fonction permet de convertir le champ "status_to" de la table de hachage generee par la methode C<getExceptionAlerts()> (et ses derives) en un status lisible ("Warning", "Error", "Severe").
 
 Retourne 0 si la valeur du parametre fourni n'est pas reconnu.
 
-=item - (*) - I<getSeverityForExceptionAlerts()>
+=item - (*) - I<getNbSessionsCreated()>
 
 Retourne le nombre d instances en cours pour le module C<CTM::ReadEM>.
 
@@ -899,9 +902,9 @@ Retourne 1 si la valeur de la propriete a ete modifiee.
 
 Leve une exception (C<carp()>) si c'est une propriete privee ou si celle-ci n'existe pas et retourne 0.
 
-=item - (*) - $obj->I<getError()>
+=item - (*) - $obj->I<getError($item)>
 
-Retourne la derniere erreur generee (plusieurs erreurs puisque cet accesseur pointe sur une reference de tableau).
+Retourne l'erreur a l'element C<$item> (0 par defaut, donc la derniere erreur generee) du tableau tableau de la reference '_errorArrayRef'.
 
 Retourne C<undef> si il n'y a pas d'erreur ou si la derniere a ete decalee via la methode C<$obj-E<gt>unshiftError()>.
 
@@ -927,7 +930,7 @@ Retourne toujours 1.
 
 =item - Initialiser plusieurs sessions :
 
-    use CTM::ReadEM qw/getNbSessionsCreated/;
+    use CTM::ReadEM qw/:all/;
 
     my %sessionParams = (
         ctmEMVersion => 7,
@@ -945,8 +948,6 @@ Retourne toujours 1.
     print getNbSessionsCreated(); # affiche "2"
 
 =item - Recupere et affiche la liste des services actuellement en cours dans le BIM du Control-M EM :
-
-    use CTM::ReadEM qw/getStatusColorForService/;
 
     # [...]
 
@@ -971,7 +972,7 @@ Retourne toujours 1.
     );
 
     unless (defined ($err = $session->getError())) {
-        print "J'ai " . $workOnServices->countItems() . " services en Warning ou en Error en cours. Voici l'enveloppe SOAP :\n"
+        print "J'ai " . $workOnServices->countItems() . " services avec le status 'qw/Warning Error/' en cours dont voici l'enveloppe SOAP :\n"
         my $xmlString = $workOnServices->getSOAPEnvelope();
         die $err if (defined ($err = $session->getError()));
         print $xmlString . "\n";

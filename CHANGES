@@ -35,7 +35,9 @@ N.B : pour plus d'informations liées aux termes employés dans ce fichier, voir l
     * 26/05/2014 - Correction de quelques bugs relatifs à la méthode $_setObjProperty->().
 - 0.162 (STABLE) :
     * 26/05/2014 - Héritage d'AUTOLOAD depuis CTM::Base.
-- 0.17 (STABLE) :
+- 0.170 (STABLE) :
     * 30/05/2014 - ajout des modules CTM::ReadEM::_workOnAlarms, CTM::ReadEM::_workOnExceptionAlerts et CTM::Base::subClass + impacts majeures sur les modules CTM::ReadEM, CTM::Base et  CTM::ReadEM::_workOnBIMServices.
+- 0.171 (STABLE)
+    * 31/05/2014 - correction de quelques erreurs dans la POD de CTM::ReadEM et ajout du tag ':all' (%EXPORT_TAG) a ce meme module.
 - 0.1x :
     * ? - prise en compte du champ 'DAYTIME' avec ses variations (+/-) dans la fonction privée $_calculStartEndDayTimeInPosixTimestamp->().
