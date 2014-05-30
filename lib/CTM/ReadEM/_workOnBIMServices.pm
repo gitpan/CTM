@@ -1,23 +1,21 @@
-#@(#)------------------------------------------------------------------------------------------------------
-#@(#) OBJET : Module du constructeur CTM::ReadEM::workOnCurrentServices()
-#@(#)------------------------------------------------------------------------------------------------------
-#@(#) APPLICATION : Control-M EM + Batch Impact Manager (BIM)
-#@(#)------------------------------------------------------------------------------------------------------
-#@(#) AUTEUR : Yoann Le Garff
-#@(#) DATE DE CREATION : 22/05/2014
-#@(#) ETAT : STABLE
-#@(#)------------------------------------------------------------------------------------------------------
-
-#==========================================================================================================
+#------------------------------------------------------------------------------------------------------
+# OBJET : Module du constructeur CTM::ReadEM::workOnCurrentServices()
+#------------------------------------------------------------------------------------------------------
+# APPLICATION : Control-M EM + Batch Impact Manager (BIM)
+#------------------------------------------------------------------------------------------------------
+# AUTEUR : Yoann Le Garff
+# DATE DE CREATION : 22/05/2014
+# ETAT : STABLE
+#------------------------------------------------------------------------------------------------------
 # USAGE / AIDE
 #   perldoc CTM::ReadEM::_workOnBIMServices
-#
+#------------------------------------------------------------------------------------------------------
 # DEPENDANCES OBLIGATOIRES
-#   - 'CTM::Base'
-#   - 'CTM::ReadEM'
-#   - 'Carp'
-#   - 'Hash::Util'
-#==========================================================================================================
+#   - CTM::Base
+#   - CTM::ReadEM
+#   - Carp
+#   - Hash::Util
+#------------------------------------------------------------------------------------------------------
 
 #-> BEGIN
 
@@ -28,16 +26,24 @@ package CTM::ReadEM::_workOnBIMServices;
 use strict;
 use warnings;
 
-use base qw/CTM::Base Exporter/;
+use base qw/
+    CTM::Base
+    CTM::Base::SubClass
+/;
 
-use Carp;
-use Hash::Util;
+use Carp qw/
+    carp
+    croak
+/;
+use Hash::Util qw/
+    unlock_hash
+/;
 
 #----> ** variables de classe **
 
-our $VERSION = 0.162;
+our $VERSION = 0.17;
 
-#----> ** fonctions privees **
+#----> ** fonctions privees (mais accessibles a l'utilisateur pour celles qui ne sont pas des references) **
 
 my $_getAllViaLogID = sub {
     my ($dbh, $sqlRequest, $verbose, @servicesLogID) = @_;
@@ -49,43 +55,36 @@ my $_getAllViaLogID = sub {
     } else {
         return 0, 0;
     }
-},
+};
 
 #----> ** methodes privees **
 
-my $_setObjProperty = sub {
-    my ($self, $property, $value) = @_;
-    my $action = exists $self->{$property} ? 1 : 0;
-    $action ? Hash::Util::unlock_value(%{$self}, $property) : Hash::Util::unlock_hash(%{$self});
-    $self->{$property} = $value;
-    $action ? Hash::Util::lock_value(%{$self}, $property) : Hash::Util::lock_hash(%{$self});
-    return 1;
-};
+#-> methodes liees aux services
 
 my $_getFromRequest = sub {
     my ($self, $sqlRequestSelectFrom, $errorType) = @_;
-    $self->$_setObjProperty('_working', 1);
+    $self->_setObjProperty('_working', 1);
     if ($self->{'_CTM::ReadEM'}->getSessionIsConnected()) {
-        if ($self->{_currentServices}) {
-            if (my @servicesLogID = keys %{$self->{_currentServices}}) {
+        if ($self->{_datas}) {
+            if (my @servicesLogID = keys %{$self->{_datas}}) {
                 my ($situation, $hashRefPAlertsJobsForServices) = $_getAllViaLogID->($self->{'_CTM::ReadEM'}->{_DBI}, $sqlRequestSelectFrom, $self->{'_CTM::ReadEM'}->{verbose}, @servicesLogID);
                 if ($situation) {
-                    $self->$_setObjProperty('_working', 0);
+                    $self->_setObjProperty('_working', 0);
                     return $hashRefPAlertsJobsForServices;
                 } else {
-                    $self->$_setObjProperty('_errorMessage', CTM::Base::_myErrorMessage((caller 0)[3], 'erreur lors de la recuperation des ' . $errorType . " : la methode DBI 'execute()' a echouee : '" . $self->{'_CTM::ReadEM'}->{_DBI}->errstr() . "'."));
+                    $self->_addError(CTM::Base::_myErrorMessage((caller 0)[3], 'erreur lors de la recuperation des ' . $errorType . " : la methode DBI 'execute()' a echouee : '" . $self->{'_CTM::ReadEM'}->{_DBI}->errstr() . "'."));
                 }
             } else {
-                $self->$_setObjProperty('_working', 0);
+                $self->_setObjProperty('_working', 0);
                 return {};
             }
         } else {
-            $self->$_setObjProperty('_errorMessage', CTM::Base::_myErrorMessage((caller 0)[3], 'impossible de recuperer les ' . $errorType . ", les services n'ont pas pu etre generer via la methode 'workOnCurrentServices()'."));
+            $self->_addError(CTM::Base::_myErrorMessage((caller 0)[3], 'impossible de recuperer les ' . $errorType . ", les services n'ont pas pu etre generer via la methode 'workOnCurrentServices()'."));
         }
     } else {
-        $self->$_setObjProperty('_errorMessage', CTM::Base::_myErrorMessage((caller 0)[3], "impossible de continuer car la connexion au SGBD n'est pas active."));
+        $self->_addError(CTM::Base::_myErrorMessage((caller 0)[3], "impossible de continuer car la connexion au SGBD n'est pas active."));
     }
-    $self->$_setObjProperty('_working', 0);
+    $self->_setObjProperty('_working', 0);
     return 0;
 };
 
@@ -94,29 +93,13 @@ my $_getFromRequest = sub {
 #-> methodes liees aux services
 
 sub refresh {
-    my $self = shift;
-    while ($self->{_working}) {
-        my $selfTemp = $self->{'_CTM::ReadEM'}->workOnCurrentServices(
-            %{$self->{'_CTM::ReadEM'}->{_params}}
-        );
-        if (defined $self->{'_CTM::ReadEM'}->{_errorMessage}) {
-            $self->$_setObjProperty('_errorMessage', $self->{'_CTM::ReadEM'}->{_errorMessage});
-            return 0;
-        } else {
-            $self->{'_CTM::ReadEM'}->clearError();
-            $selfTemp->$_setObjProperty('_errorMessage', $self->{_errorMessage});
-            Hash::Util::unlock_hash(%{$self});
-            $self = $selfTemp;
-            Hash::Util::lock_hash(%{$self});
-            return 1;
-        }
-    }
+    return shift->SUPER::_refresh('workOnCurrentServices');
 }
 
 sub getSOAPEnvelope {
     my $self = shift;
-    $self->$_setObjProperty('_working', 1);
-    if ($self->{_currentServices}) {
+    $self->_setObjProperty('_working', 1);
+    if ($self->{_datas}) {
         my $XMLStr = <<XML;
 <?xml version="1.0" encoding="iso-8859-1"?>
 <SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/">
@@ -125,11 +108,11 @@ sub getSOAPEnvelope {
         <ctmem:status>OK</ctmem:status>
         <ctmem:services>
 XML
-        for (keys %{$self->{_currentServices}}) {
+        for (keys %{$self->{_datas}}) {
             $XMLStr .= <<XML;
             <ctmem:service>
 XML
-            while (my ($key, $value) = each %{$self->{_currentServices}->{$_}}) {
+            while (my ($key, $value) = each %{$self->{_datas}->{$_}}) {
                 if (defined $value) {
                     $XMLStr .= <<XML;
                 <ctmem:$key>$value</ctmem:$key>
@@ -147,13 +130,13 @@ XML
 </SOAP-ENV:Envelope>
 XML
         chomp $XMLStr;
-        $self->$_setObjProperty('_working', 0);
+        $self->_setObjProperty('_working', 0);
         return \$XMLStr;
     } else {
-        $self->$_setObjProperty('_errorMessage', CTM::Base::_myErrorMessage((caller 0)[3], "impossible de generer le XML, les services n'ont pas pu etre generer via la methode 'workOnCurrentServices()'."));
-        $self->$_setObjProperty('_working', 0);
-        return 0;
+        $self->_addError(CTM::Base::_myErrorMessage((caller 0)[3], "impossible de generer le XML, les services n'ont pas pu etre generer via la methode 'workOnCurrentServices()'."));
+        $self->_setObjProperty('_working', 0);
     }
+    return 0;
 }
 
 sub getAlerts {
@@ -171,7 +154,7 @@ BEGIN {
 }
 
 sub DESTROY {
-    Hash::Util::unlock_hash(%{+shift});
+    unlock_hash(%{+shift});
 }
 
 #-> END
