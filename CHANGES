@@ -45,5 +45,8 @@ CHANGEMENTS :
     * 01/06/2014 - correction de la méthode protégée _refresh().
     * 01/06/2014 - correction de plusieurs erreurs pour les méthodes getAlarms() et getExceptionAlerts() (paramètre 'severity').
     * 01/06/2014 - limitation de l'utilisation de regex (gain de performance très faible).
+- 0.173 (STABLE)
+    * 02/06/2014 - apport des paramètres "limit" et "timeSort" aux méthodes getAlarms() et getExceptionAlerts() ainsi qu'à leurs dérivés.
+    * 02/06/2014 - amélioration de la vérification de certains paramètres pour les méthodes newSession() et get*.
 - 0.x :
     * ? - prise en compte du champ 'DAYTIME' avec ses variations (+/-) dans la fonction privée $_calculStartEndDayTimeInPosixTimestamp->().

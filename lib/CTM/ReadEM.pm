@@ -37,9 +37,9 @@ use base qw/
     CTM::Base
 /;
 
-use CTM::ReadEM::_workOnBIMServices 0.172;
-use CTM::ReadEM::_workOnAlarms 0.172;
-use CTM::ReadEM::_workOnExceptionAlerts 0.172;
+use CTM::ReadEM::_workOnBIMServices 0.173;
+use CTM::ReadEM::_workOnAlarms 0.173;
+use CTM::ReadEM::_workOnExceptionAlerts 0.173;
 
 use Carp qw/
     carp
@@ -51,14 +51,14 @@ use Hash::Util qw/
     unlock_value
 /;
 use POSIX qw/
-    strftime
     :signal_h
+    strftime
 /;
 use DBI;
 
 #----> ** variables de classe **
 
-our $VERSION = 0.172;
+our $VERSION = 0.173;
 our @EXPORT_OK = qw/
     $VERSION
     getStatusColorForService
@@ -193,7 +193,7 @@ SQL
 };
 
 my $_getAlarms = sub {
-    my ($dbh, $matching, $severity, $verbose) = @_;
+    my ($dbh, $matching, $severity, $limit, $timeSort, $verbose) = @_;
     my $sqlRequest = <<SQL;
 SELECT *, TO_CHAR(upd_time, 'YYYY/MM/DD HH:MI:SS') AS upd_time_to_char
 FROM alarm
@@ -208,11 +208,9 @@ SQL
             } elsif ($_ eq 'Very_Urgent') {
                 "severity = 'V'";
             }
-        } @{CTM::Base::_uniqItemsArrayRef($severity)}) . ");\n";
-    } else {
-        chomp $sqlRequest;
-        $sqlRequest .= ";\n";
+        } @{CTM::Base::_uniqItemsArrayRef($severity)}) . ")\nORDER BY upd_time " . $timeSort;
     }
+    $sqlRequest .= $limit ? "\nLIMIT " . $limit . ";\n" : ";\n";
     print "VERBOSE - \$getAlarms->() :\n\n" . $sqlRequest if ($verbose);
     my $sth = $dbh->prepare($sqlRequest);
     if ($sth->execute()) {
@@ -224,7 +222,7 @@ SQL
 };
 
 my $_getExceptionAlerts = sub {
-    my ($dbh, $matching, $severity, $verbose) = @_;
+    my ($dbh, $matching, $severity, $limit, $timeSort, $verbose) = @_;
     my $sqlRequest = <<SQL;
 SELECT *, TO_CHAR(xtime, 'YYYY/MM/DD HH:MI:SS') AS xtime_to_char, TO_CHAR(xtime_of_last, 'YYYY/MM/DD HH:MI:SS') AS xtime_of_last_to_char
 FROM exception_alerts
@@ -239,11 +237,9 @@ SQL
             } elsif ($_ eq 'Severe') {
                 "xseverity = '1'";
             }
-        } @{CTM::Base::_uniqItemsArrayRef($severity)}) . ");\n";
-    } else {
-        chomp $sqlRequest;
-        $sqlRequest .= ";\n";
+        } @{CTM::Base::_uniqItemsArrayRef($severity)}) . ")\nORDER BY xtime " . $timeSort;
     }
+    $sqlRequest .= $limit ? "\nLIMIT " . $limit . ";\n" : ";\n";
     print "VERBOSE - \$getExceptionAlerts->() :\n\n" . $sqlRequest if ($verbose);
     my $sth = $dbh->prepare($sqlRequest);
     if ($sth->execute()) {
@@ -320,10 +316,10 @@ my $_newSessionConstructor = sub {
         $self->{DBMSInstance} = $params{DBMSInstance};
         $self->{DBMSUser} = $params{DBMSUser};
         $self->{DBMSPassword} = exists $params{DBMSPassword} ? $params{DBMSPassword} : undef;
-        $self->{DBMSTimeout} = (exists $params{DBMSTimeout} && defined $params{DBMSTimeout} && $params{DBMSTimeout} >= 0) ? $params{DBMSTimeout} : 0;
+        $self->{DBMSTimeout} = $params{DBMSTimeout} || 0;
         $self->{verbose} = $params{verbose} || 0;
     } else {
-        croak(CTM::Base::_myErrorMessage('newSession', "la methode n'est pas correctement declaree (une cle, une valeur)."));
+        croak(CTM::Base::_myErrorMessage('newSession', "un ou plusieurs parametres obligatoires n'ont pas ete renseignes."));
     }
     $self->{_errors} = [];
     $self->{_DBI} = undef;
@@ -347,8 +343,8 @@ my $_subClassConstructor = sub {
 my $_connectToDB = sub {
     my $self = shift;
     $self->unshiftError();
-    if (exists $self->{_ctmEMVersion} && exists $self->{DBMSType} && exists $self->{DBMSAddress} && exists $self->{DBMSPort} && exists $self->{DBMSInstance} && exists $self->{DBMSUser}) {
-        if (($self->{_ctmEMVersion} eq '6' || $self->{_ctmEMVersion} eq '7' || $self->{_ctmEMVersion} eq '8') && ($self->{DBMSType} eq 'Pg' || $self->{DBMSType} eq 'Oracle' || $self->{DBMSType} eq 'mysql' || $self->{DBMSType} eq 'Sybase' || $self->{DBMSType} eq 'ODBC') && $self->{DBMSAddress} ne '' && $self->{DBMSPort} =~ /^\d+$/ && $self->{DBMSPort} >= 0 && $self->{DBMSPort} <= 65535 && $self->{DBMSInstance} ne '' && $self->{DBMSUser} ne '') {
+    if (exists $self->{_ctmEMVersion} && exists $self->{DBMSType} && exists $self->{DBMSAddress} && exists $self->{DBMSPort} && exists $self->{DBMSInstance} && exists $self->{DBMSUser} && exists $self->{DBMSTimeout}) {
+        if (($self->{_ctmEMVersion} eq '6' || $self->{_ctmEMVersion} eq '7' || $self->{_ctmEMVersion} eq '8') && ($self->{DBMSType} eq 'Pg' || $self->{DBMSType} eq 'Oracle' || $self->{DBMSType} eq 'mysql' || $self->{DBMSType} eq 'Sybase' || $self->{DBMSType} eq 'ODBC') && $self->{DBMSAddress} ne '' && $self->{DBMSPort} =~ /^\d+$/ && $self->{DBMSPort} >= 0 && $self->{DBMSPort} <= 65535 && $self->{DBMSInstance} ne '' && $self->{DBMSUser} ne '' && $self->{DBMSTimeout} =~ /^\d+$/) {
             unless ($self->getSessionIsConnected()) {
                 if (eval 'require DBD::' . $self->{DBMSType}) {
                     my $myOSIsUnix = CTM::Base::_isUnix();
@@ -374,6 +370,7 @@ my $_connectToDB = sub {
                         } else {
                             $connectionString .= ':host=' . $self->{DBMSAddress} . ';database=' . $self->{DBMSInstance} . ';port=' . $self->{DBMSPort};
                         }
+                        alarm $self->{DBMSTimeout};
                         $self->{_DBI} = DBI->connect(
                             $connectionString,
                             $self->{DBMSUser},
@@ -395,7 +392,7 @@ my $_connectToDB = sub {
                         $self->_addError(CTM::Base::_myErrorMessage('connectToDB', $@));
                         return 0;
                     }
-                    my ($situation, $inexistingSQLTables) = $_doesTablesExists->($self->{_DBI}, qw/bim_log bim_prob_jobs bim_alert comm download/);
+                    my ($situation, $inexistingSQLTables) = $_doesTablesExists->($self->{_DBI}, qw/bim_log bim_prob_jobs bim_alert comm download alarm exception_alerts/);
                     if ($situation) {
                         unless (@{$inexistingSQLTables}) {
                             $self->_setObjProperty('_sessionIsConnected', 1);
@@ -497,7 +494,7 @@ sub getCurrentServices {
                     return 0;
                 }
             }
-            ($situation, my $servicesDatas) = $_getBIMServices->($self->{_DBI}, $datacenterInfos, exists $params{matching} ? $params{matching} : '%', exists $params{forLastNetName} ? $params{forLastNetName} : 0, exists $params{forStatus} ? $params{forStatus} : 0, exists $params{forDataCenters} ? $params{forDataCenters} : 0, $self->{verbose});
+            ($situation, my $servicesDatas) = $_getBIMServices->($self->{_DBI}, $datacenterInfos, exists $params{matching} && defined $params{matching} ? $params{matching} : '%', exists $params{forLastNetName} ? $params{forLastNetName} : 0, exists $params{forStatus} ? $params{forStatus} : 0, exists $params{forDataCenters} ? $params{forDataCenters} : 0, $self->{verbose});
             unless ($situation) {
                 if (defined $servicesDatas) {
                     $self->_addError(CTM::Base::_myErrorMessage('getCurrentServices', "erreur lors de la recuperation des services du BIM : la methode DBI 'execute()' a echoue : '" . $servicesDatas . "'."));
@@ -530,7 +527,7 @@ sub getAlarms {
     my ($self, %params) = (shift, @_);
     $self->unshiftError();
     if ($self->getSessionIsConnected()) {
-        my ($situation, $alarmsData) = $_getAlarms->($self->{_DBI}, exists $params{matching} ? $params{matching} : '%', exists $params{severity} ? $params{severity} : 0, $self->{verbose});
+        my ($situation, $alarmsData) = $_getAlarms->($self->{_DBI}, exists $params{matching} && defined $params{matching} ? $params{matching} : '%', exists $params{severity} ? $params{severity} : 0, exists $params{limit} && defined $params{limit} && $params{limit} =~ /^\d+$/ ? $params{limit} : 0, exists $params{timeSort} && defined $params{timeSort} && $params{timeSort} =~ /^ASC|DESC$/i ? $params{timeSort} : 'ASC', $self->{verbose});
         if ($situation) {
             return $alarmsData;
         } else {
@@ -556,7 +553,7 @@ sub getExceptionAlerts {
     my ($self, %params) = (shift, @_);
     $self->unshiftError();
     if ($self->getSessionIsConnected()) {
-        my ($situation, $exceptionAlertsDatas) = $_getExceptionAlerts->($self->{_DBI}, exists $params{matching} ? $params{matching} : '%', exists $params{severity} ? $params{severity} : 0, $self->{verbose});
+        my ($situation, $exceptionAlertsDatas) = $_getExceptionAlerts->($self->{_DBI}, exists $params{matching} && defined $params{matching} ? $params{matching} : '%', exists $params{severity} ? $params{severity} : 0, exists $params{limit} && defined $params{limit} && $params{limit} =~ /^\d+$/ ? $params{limit} : 0, exists $params{timeSort} && defined $params{timeSort} && $params{timeSort} =~ /^ASC|DESC$/i ? $params{timeSort} : 'ASC', $self->{verbose});
         if ($situation) {
             return $exceptionAlertsDatas;
         } else {
@@ -799,6 +796,10 @@ Un filtre est disponible sur le message des alarmes avec le parametre "matching"
 
 Le parametre "severity" doit etre une reference d'un tableau. Si c'est le cas, la methode ne retournera que les alarmes avec les pour les severites renseignees (severites valides (sensibles a la case) : "Regular", "Urgent", "Very_Urgent") dans ce tableau.
 
+Le parametre "timeSort" : SQL C<ORDER BY> . Il trie les donnees renvoyees de maniere ascendante (SQL C<ASC> (insensible a la case)) ou descendante (SQL C<DESC> (insensible a la case)) sur la date de l'alerte.
+
+Le parametre "limit" : SQL C<LIMIT>. Il prend un entier comme valeur (pas d'interval "n,n").
+
 La cle de cette table de hachage est "serial".
 
 Retourne 0 si la methode a echouee.
@@ -836,6 +837,10 @@ Retourne une reference de la table de hachage de la liste des alertes en cours d
 Un filtre est disponible sur le message des alertes avec le parametre "matching" (SQL C<LIKE> clause).
 
 Le parametre "severity" doit etre une reference d'un tableau. Si c'est le cas, la methode ne retournera que les alertes avec les pour les severites renseignees (severites valides (sensibles a la case) : "Warning", "Error", "Severe") dans ce tableau.
+
+Le parametre "timeSort" : SQL C<ORDER BY> . Il trie les donnees renvoyees de maniere ascendante (SQL C<ASC> (insensible a la case)) ou descendante (SQL C<DESC> (insensible a la case)) sur la date de l'alerte.
+
+Le parametre "limit" : SQL C<LIMIT>. Il prend un entier comme valeur (pas d'interval "n,n").
 
 La cle de cette table de hachage est "serial".
 
@@ -899,7 +904,7 @@ Leve une exception (C<carp()>) si c'est une propriete privee ou si celle-ci n'ex
 
 =item - (*) - $obj->I<getError($item)>
 
-Retourne l'erreur a l'element C<$item> (0 par defaut, donc la derniere erreur generee) du tableau tableau de la reference '_errors'.
+Retourne l'erreur a l'element C<$item> (0 par defaut, donc la derniere erreur generee) du tableau de la reference '_errors'.
 
 Retourne C<undef> si il n'y a pas d'erreur ou si la derniere a ete decalee via la methode C<$obj-E<gt>unshiftError()>.
 

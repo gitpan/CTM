@@ -44,7 +44,7 @@ use Time::Local;
 
 #----> ** variables de classe **
 
-our $VERSION = 0.172;
+our $VERSION = 0.173;
 our $AUTOLOAD;
 
 #----> ** fonctions privees (mais accessibles a l'utilisateur pour celles qui ne sont pas des references) **

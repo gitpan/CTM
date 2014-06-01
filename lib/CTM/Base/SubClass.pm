@@ -44,7 +44,7 @@ use Hash::Util qw/
 
 #----> ** variables de classe **
 
-our $VERSION = 0.172;
+our $VERSION = 0.173;
 
 #----> ** methodes protegees **
 
@@ -63,7 +63,7 @@ sub _refresh {
             return 1;
         }
     }
-    carp(_myErrorMessage('_refresh', "tentative d'utilisation d'une methode protegee."));
+    carp(CTM::Base::_myErrorMessage('_refresh', "tentative d'utilisation d'une methode protegee."));
     return 0;
 }
 
