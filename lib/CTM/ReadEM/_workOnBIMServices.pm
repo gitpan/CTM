@@ -41,14 +41,14 @@ use Hash::Util qw/
 
 #----> ** variables de classe **
 
-our $VERSION = 0.171;
+our $VERSION = 0.172;
 
 #----> ** fonctions privees (mais accessibles a l'utilisateur pour celles qui ne sont pas des references) **
 
 my $_getAllViaLogID = sub {
     my ($dbh, $sqlRequest, $verbose, @servicesLogID) = @_;
-    $sqlRequest .= " WHERE log_id IN ('" . join("', '", @servicesLogID) . "');";
-    print "> VERBOSE - _getAllViaLogID() :\n\n" . $sqlRequest . "\n" if ($verbose);
+    $sqlRequest .= " WHERE log_id IN ('" . (join "', '", @servicesLogID) . "');";
+    print "VERBOSE - _getAllViaLogID() :\n\n" . $sqlRequest . "\n" if ($verbose);
     my $sth = $dbh->prepare($sqlRequest);
     if ($sth->execute()) {
         return 1, $sth->fetchall_hashref('log_id');
@@ -62,7 +62,7 @@ my $_getAllViaLogID = sub {
 #-> methodes liees aux services
 
 my $_getFromRequest = sub {
-    my ($self, $sqlRequestSelectFrom, $errorType) = @_;
+    my ($self, $childSub, $sqlRequestSelectFrom, $errorType) = @_;
     $self->_setObjProperty('_working', 1);
     if ($self->{'_CTM::ReadEM'}->getSessionIsConnected()) {
         if ($self->{_datas}) {
@@ -72,17 +72,17 @@ my $_getFromRequest = sub {
                     $self->_setObjProperty('_working', 0);
                     return $hashRefPAlertsJobsForServices;
                 } else {
-                    $self->_addError(CTM::Base::_myErrorMessage((caller 0)[3], 'erreur lors de la recuperation des ' . $errorType . " : la methode DBI 'execute()' a echouee : '" . $self->{'_CTM::ReadEM'}->{_DBI}->errstr() . "'."));
+                    $self->_addError(CTM::Base::_myErrorMessage($childSub, 'erreur lors de la recuperation des ' . $errorType . " : la methode DBI 'execute()' a echouee : '" . $self->{'_CTM::ReadEM'}->{_DBI}->errstr() . "'."));
                 }
             } else {
                 $self->_setObjProperty('_working', 0);
                 return {};
             }
         } else {
-            $self->_addError(CTM::Base::_myErrorMessage((caller 0)[3], 'impossible de recuperer les ' . $errorType . ", les services n'ont pas pu etre generer via la methode 'workOnCurrentServices()'."));
+            $self->_addError(CTM::Base::_myErrorMessage($childSub, 'impossible de recuperer les ' . $errorType . ", les services n'ont pas pu etre generer via la methode 'workOnCurrentServices()'."));
         }
     } else {
-        $self->_addError(CTM::Base::_myErrorMessage((caller 0)[3], "impossible de continuer car la connexion au SGBD n'est pas active."));
+        $self->_addError(CTM::Base::_myErrorMessage($childSub, "impossible de continuer car la connexion au SGBD n'est pas active."));
     }
     $self->_setObjProperty('_working', 0);
     return 0;
@@ -133,18 +133,18 @@ XML
         $self->_setObjProperty('_working', 0);
         return \$XMLStr;
     } else {
-        $self->_addError(CTM::Base::_myErrorMessage((caller 0)[3], "impossible de generer le XML, les services n'ont pas pu etre generer via la methode 'workOnCurrentServices()'."));
+        $self->_addError(CTM::Base::_myErrorMessage('getSOAPEnvelope', "impossible de generer le XML, les services n'ont pas pu etre generer via la methode 'workOnCurrentServices()'."));
         $self->_setObjProperty('_working', 0);
     }
     return 0;
 }
 
 sub getAlerts {
-    return shift->$_getFromRequest('SELECT * FROM bim_alert', 'alertes');
+    return shift->$_getFromRequest('getAlerts', 'SELECT * FROM bim_alert', 'alertes');
 }
 
 sub getProblematicsJobs {
-    return shift->$_getFromRequest('SELECT * FROM bim_prob_jobs', 'jobs en erreur');
+    return shift->$_getFromRequest('getProblematicsJobs', 'SELECT * FROM bim_prob_jobs', 'jobs en erreur');
 }
 
 #-> Perl BuiltIn

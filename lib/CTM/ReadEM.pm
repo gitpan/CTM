@@ -37,9 +37,9 @@ use base qw/
     CTM::Base
 /;
 
-use CTM::ReadEM::_workOnBIMServices 0.171;
-use CTM::ReadEM::_workOnAlarms 0.171;
-use CTM::ReadEM::_workOnExceptionAlerts 0.171;
+use CTM::ReadEM::_workOnBIMServices 0.172;
+use CTM::ReadEM::_workOnAlarms 0.172;
+use CTM::ReadEM::_workOnExceptionAlerts 0.172;
 
 use Carp qw/
     carp
@@ -58,7 +58,7 @@ use DBI;
 
 #----> ** variables de classe **
 
-our $VERSION = 0.171;
+our $VERSION = 0.172;
 our @EXPORT_OK = qw/
     $VERSION
     getStatusColorForService
@@ -78,10 +78,11 @@ my %_sessionsState = (
 
 #----> ** fonctions privees (mais accessibles a l'utilisateur pour celles qui ne sont pas des references) **
 
-sub _calculStartEndDayTimeInPosixTimestamp {
-    my ($time, $ctmDailyTime, $previousNextOrAll) = @_;
+sub _calculStartEndDayTimeInPosixTimestamp($$) {
+    my ($time, $ctmDailyTime) = @_;
     if ($ctmDailyTime =~ /[\+\-]\d{4}$/) {
-        my ($ctmDailyPreviousOrNext, $ctmDailyHour, $ctmDailyMin) = (substr($ctmDailyTime, 0, 1), unpack '(a2)*', substr $ctmDailyTime, 1, 4);
+        my ($ctmDailyPreviousOrNext, $ctmDailyHour, $ctmDailyMin) = ((substr $ctmDailyTime, 0, 1), unpack '(a2)*', substr $ctmDailyTime, 1, 4);
+        # $ctmDailyPreviousOrNext : a utiliser pour la gestion du '+-' du champ 'DAYTIME'
         my ($minNow, $hoursNow, $dayNow, $monthNow, $yearNow) = split /\s+/, strftime('%M %H %d %m %Y', localtime $time);
         my ($previousDay, $previousDayMonth, $previousDayYear) = split /\s+/, strftime('%d %m %Y', localtime $time - 86400);
         my ($nextDay, $nextDayMonth, $nextDayYear) = split /\s+/, strftime('%d %m %Y', localtime $time + 86400);
@@ -93,15 +94,7 @@ sub _calculStartEndDayTimeInPosixTimestamp {
             $startDayTimeInPosixTimestamp = CTM::Base::_dateToPosixTimestamp($previousDayYear . '/' . $previousDayMonth . '/' . $previousDay . '-' . $ctmDailyHour . ':' . $ctmDailyMin . ':' . 00);
             $endDayTimeInPosixTimestamp = CTM::Base::_dateToPosixTimestamp($yearNow . '/' . $monthNow . '/' . $dayNow . '-' . $ctmDailyHour . ':' . $ctmDailyMin . ':' . 00);
         }
-        if (defined $startDayTimeInPosixTimestamp && defined $endDayTimeInPosixTimestamp) {
-            for ($previousNextOrAll) {
-                /^\*$/ && return 1, $startDayTimeInPosixTimestamp, $endDayTimeInPosixTimestamp;
-                /^\+$/ && return 1, $endDayTimeInPosixTimestamp;
-                return 1, $startDayTimeInPosixTimestamp;
-            }
-        } else {
-            return 0, 1;
-        }
+        return (defined $startDayTimeInPosixTimestamp && defined $endDayTimeInPosixTimestamp) ? (1, $startDayTimeInPosixTimestamp, $endDayTimeInPosixTimestamp) : (0, 1);
     }
     return 0, 0;
 }
@@ -132,7 +125,7 @@ FROM comm c, (
 WHERE c.data_center = d.data_center
 AND c.enabled = '1';
 SQL
-    print "> VERBOSE - \$_getDatasCentersInfos->() :\n\n" . $sqlRequest . "\n" if ($verbose);
+    print "VERBOSE - \$_getDatasCentersInfos->() :\n\n" . $sqlRequest . "\n" if ($verbose);
     my $sth = $dbh->prepare($sqlRequest);
     if ($sth->execute()) {
         my $hashRef = $sth->fetchall_hashref('data_center');
@@ -150,10 +143,9 @@ SQL
     } else {
         return 0, $dbh->errstr();
     }
-    return 0, undef;
 };
 
-my $_getAllServices = sub {
+my $_getBIMServices = sub {
     my ($dbh, $datacenterInfos, $matching, $forLastNetName, $serviceStatus, $forDataCenters, $verbose) = @_;
     if (%{$datacenterInfos}) {
         my $sqlRequest = <<SQL;
@@ -173,26 +165,23 @@ SQL
         }
         if (ref $serviceStatus eq 'ARRAY' && @{$serviceStatus}) {
             $sqlRequest .= 'AND (' . (join ' OR ', map {
-                if (/^OK$/) {
+                if ($_ eq 'OK') {
                     "status_to = '4'";
-                } elsif (/^Completed_OK$/) {
+                } elsif ($_ eq 'Completed_OK') {
                     "status_to = '8'";
-                } elsif (/^Completed_OK$/) {
+                } elsif ($_ eq 'Error') {
                     "(status_to >= '16' AND status_to < '128')";
-                } elsif (/^Completed_OK$/) {
+                } elsif ($_ eq 'Warning') {
                     "(status_to >= '128' AND status_to < '256')";
-                } elsif (/^Completed_OK$/) {
+                } elsif ($_ eq 'Completed_Late') {
                     "status_to >= '256'";
                 }
             } @{CTM::Base::_uniqItemsArrayRef($serviceStatus)}) . ")\n";
         }
         if (ref $forDataCenters eq 'ARRAY' && @{$forDataCenters}) {
-            $sqlRequest .= 'AND (' . (join ' OR ', map { "data_center = '" . $_ . "'" } @{CTM::Base::_uniqItemsArrayRef($forDataCenters)}) . ")\n";
+            $sqlRequest .= 'AND (' . (join ' OR ', map { "data_center = '" . $_ . "'" } @{CTM::Base::_uniqItemsArrayRef($forDataCenters)}) . ")\nORDER BY service_name;\n";
         }
-        $sqlRequest .= <<SQL;
-ORDER BY service_name;
-SQL
-        print "> VERBOSE - \$_getAllServices->() :\n\n" . $sqlRequest if ($verbose);
+        print "VERBOSE - \$_getBIMServices->() :\n\n" . $sqlRequest if ($verbose);
         my $sth = $dbh->prepare($sqlRequest);
         if ($sth->execute()) {
             return 1, $sth->fetchall_hashref('log_id');
@@ -208,20 +197,23 @@ my $_getAlarms = sub {
     my $sqlRequest = <<SQL;
 SELECT *, TO_CHAR(upd_time, 'YYYY/MM/DD HH:MI:SS') AS upd_time_to_char
 FROM alarm
-WHERE message LIKE '$matching';
+WHERE message LIKE '$matching'
 SQL
     if (ref $severity eq 'ARRAY' && @{$severity}) {
         $sqlRequest .= 'AND (' . (join ' OR ', map {
-            if (/^Regular$/) {
+            if ($_ eq 'Regular') {
                 "severity = 'R'";
-            } elsif (/^Urgent$/) {
+            } elsif ($_ eq 'Urgent') {
                 "severity = 'U'";
-            } elsif (/^Very_Urgent$/) {
+            } elsif ($_ eq 'Very_Urgent') {
                 "severity = 'V'";
             }
-        } @{CTM::Base::_uniqItemsArrayRef($severity)}) . ")\n";
+        } @{CTM::Base::_uniqItemsArrayRef($severity)}) . ");\n";
+    } else {
+        chomp $sqlRequest;
+        $sqlRequest .= ";\n";
     }
-    print "> VERBOSE - \$getAlarms->() :\n\n" . $sqlRequest if ($verbose);
+    print "VERBOSE - \$getAlarms->() :\n\n" . $sqlRequest if ($verbose);
     my $sth = $dbh->prepare($sqlRequest);
     if ($sth->execute()) {
         my $hashRef = $sth->fetchall_hashref('serial');
@@ -229,7 +221,6 @@ SQL
     } else {
         return 0, $dbh->errstr();
     }
-    return 0, undef;
 };
 
 my $_getExceptionAlerts = sub {
@@ -237,20 +228,23 @@ my $_getExceptionAlerts = sub {
     my $sqlRequest = <<SQL;
 SELECT *, TO_CHAR(xtime, 'YYYY/MM/DD HH:MI:SS') AS xtime_to_char, TO_CHAR(xtime_of_last, 'YYYY/MM/DD HH:MI:SS') AS xtime_of_last_to_char
 FROM exception_alerts
-WHERE message LIKE '$matching';
+WHERE message LIKE '$matching'
 SQL
     if (ref $severity eq 'ARRAY' && @{$severity}) {
         $sqlRequest .= 'AND (' . (join ' OR ', map {
-            if (/^Warning$/) {
+            if ($_ eq 'Warning') {
                 "xseverity = '3'";
-            } elsif (/^Error$/) {
+            } elsif ($_ eq 'Error') {
                 "xseverity = '2'";
-            } elsif (/^Severe$/) {
+            } elsif ($_ eq 'Severe') {
                 "xseverity = '1'";
             }
-        } @{CTM::Base::_uniqItemsArrayRef($severity)}) . ")\n";
+        } @{CTM::Base::_uniqItemsArrayRef($severity)}) . ");\n";
+    } else {
+        chomp $sqlRequest;
+        $sqlRequest .= ";\n";
     }
-    print "> VERBOSE - \$getExceptionAlerts->() :\n\n" . $sqlRequest if ($verbose);
+    print "VERBOSE - \$getExceptionAlerts->() :\n\n" . $sqlRequest if ($verbose);
     my $sth = $dbh->prepare($sqlRequest);
     if ($sth->execute()) {
         my $hashRef = $sth->fetchall_hashref('serial');
@@ -258,7 +252,6 @@ SQL
     } else {
         return 0, $dbh->errstr();
     }
-    return 0, undef;
 };
 
 #----> ** fonctions publiques **
@@ -283,9 +276,9 @@ sub getSeverityForAlarms($) {
     $severity = $severity->{severity} if (ref $severity eq 'HASH');
     if (defined $severity) {
         for ($severity) {
-            /^r$/i && return 'Regular';
-            /^u$/i && return 'Urgent';
-            /^v$/i && return 'Very Urgent';
+            $_ eq 'R' && return 'Regular';
+            $_ eq 'U' && return 'Urgent';
+            $_ eq 'V' && return 'Very Urgent';
         }
     }
     return 0;
@@ -328,11 +321,11 @@ my $_newSessionConstructor = sub {
         $self->{DBMSUser} = $params{DBMSUser};
         $self->{DBMSPassword} = exists $params{DBMSPassword} ? $params{DBMSPassword} : undef;
         $self->{DBMSTimeout} = (exists $params{DBMSTimeout} && defined $params{DBMSTimeout} && $params{DBMSTimeout} >= 0) ? $params{DBMSTimeout} : 0;
-        $self->{verbose} = (exists $params{verbose} && defined $params{verbose}) + 0;
+        $self->{verbose} = $params{verbose} || 0;
     } else {
-        croak(CTM::Base::_myErrorMessage((caller 0)[3], "la methode n'est pas correctement declaree."));
+        croak(CTM::Base::_myErrorMessage('newSession', "la methode n'est pas correctement declaree (une cle, une valeur)."));
     }
-    $self->{_errorArrayRef} = [];
+    $self->{_errors} = [];
     $self->{_DBI} = undef;
     $self->{_sessionIsConnected} = 0;
     $class = ref $class || $class;
@@ -345,7 +338,7 @@ my $_subClassConstructor = sub {
     my $subSelf = {};
     $subSelf->{'_CTM::ReadEM'} = $self;
     $subSelf->{_working} = 0;
-    $subSelf->{_errorArrayRef} = [];
+    $subSelf->{_errors} = [];
     $subSelf->{_params} = \%params;
     $subSelf->{_datas} = $self->$baseMethod(%params);
     return bless $subSelf, $SubClass;
@@ -355,7 +348,7 @@ my $_connectToDB = sub {
     my $self = shift;
     $self->unshiftError();
     if (exists $self->{_ctmEMVersion} && exists $self->{DBMSType} && exists $self->{DBMSAddress} && exists $self->{DBMSPort} && exists $self->{DBMSInstance} && exists $self->{DBMSUser}) {
-        if ($self->{_ctmEMVersion} =~ /^[678]$/ && $self->{DBMSType} =~ /^(Pg|Oracle|mysql|Sybase|ODBC)$/ && $self->{DBMSAddress} ne '' && $self->{DBMSPort} =~ /^\d+$/ && $self->{DBMSPort} >= 0 && $self->{DBMSPort} <= 65535 && $self->{DBMSInstance} ne '' && $self->{DBMSUser} ne '') {
+        if (($self->{_ctmEMVersion} eq '6' || $self->{_ctmEMVersion} eq '7' || $self->{_ctmEMVersion} eq '8') && ($self->{DBMSType} eq 'Pg' || $self->{DBMSType} eq 'Oracle' || $self->{DBMSType} eq 'mysql' || $self->{DBMSType} eq 'Sybase' || $self->{DBMSType} eq 'ODBC') && $self->{DBMSAddress} ne '' && $self->{DBMSPort} =~ /^\d+$/ && $self->{DBMSPort} >= 0 && $self->{DBMSPort} <= 65535 && $self->{DBMSInstance} ne '' && $self->{DBMSUser} ne '') {
             unless ($self->getSessionIsConnected()) {
                 if (eval 'require DBD::' . $self->{DBMSType}) {
                     my $myOSIsUnix = CTM::Base::_isUnix();
@@ -399,7 +392,7 @@ my $_connectToDB = sub {
                     sigaction(SIGALRM, $oldaction) if ($myOSIsUnix);
                     return 0 if ($self->getError());
                     if ($@) {
-                        $self->_addError(CTM::Base::_myErrorMessage((caller 0)[3], $@));
+                        $self->_addError(CTM::Base::_myErrorMessage('connectToDB', $@));
                         return 0;
                     }
                     my ($situation, $inexistingSQLTables) = $_doesTablesExists->($self->{_DBI}, qw/bim_log bim_prob_jobs bim_alert comm download/);
@@ -409,23 +402,23 @@ my $_connectToDB = sub {
                             $_sessionsState{nbSessionsConnected}++;
                             return 1;
                         } else {
-                            $self->_addError(CTM::Base::_myErrorMessage((caller 0)[3], "la connexion au SGBD est etablie mais il manque une ou plusieurs tables ('" . (join "', '", @{$inexistingSQLTables}) . "') qui sont requises ."));
+                            $self->_addError(CTM::Base::_myErrorMessage('connectToDB', "la connexion au SGBD est etablie mais il manque une ou plusieurs tables ('" . (join "', '", @{$inexistingSQLTables}) . "') qui sont requises ."));
                         }
                     } else {
-                        $self->_addError(CTM::Base::_myErrorMessage((caller 0)[3], "la connexion est etablie mais la ou les methodes DBI 'execute()' ont echouees : '" . $inexistingSQLTables . "'."));
+                        $self->_addError(CTM::Base::_myErrorMessage('connectToDB', "la connexion est etablie mais la ou les methodes DBI 'execute()' ont echouees : '" . $inexistingSQLTables . "'."));
                     }
                 } else {
                     $@ =~ s/\s+/ /g;
-                    $self->_addError(CTM::Base::_myErrorMessage((caller 0)[3], "impossible de charger le module 'DBD::" . $self->{DBMSType} . "' : '" . $@ . "'."));
+                    $self->_addError(CTM::Base::_myErrorMessage('connectToDB', "impossible de charger le module 'DBD::" . $self->{DBMSType} . "' : '" . $@ . "'."));
                 }
             } else {
-                $self->_addError(CTM::Base::_myErrorMessage((caller 0)[3], "impossible de se connecter car cette instance est deja connectee."));
+                $self->_addError(CTM::Base::_myErrorMessage('connectToDB', "impossible de se connecter car cette instance est deja connectee."));
             }
         } else {
-            croak(CTM::Base::_myErrorMessage((caller 0)[3], "un ou plusieurs parametres ne sont pas valides."));
+            croak(CTM::Base::_myErrorMessage('connectToDB', "un ou plusieurs parametres ne sont pas valides."));
         }
     } else {
-        croak(CTM::Base::_myErrorMessage((caller 0)[3], "un ou plusieurs parametres ne sont pas valides."));
+        croak(CTM::Base::_myErrorMessage('connectToDB', "un ou plusieurs parametres ne sont pas valides."));
     }
     return 0;
 };
@@ -439,10 +432,10 @@ my $_disconnectFromDB = sub {
             $_sessionsState{nbSessionsConnected}--;
             return 1;
         } else {
-            $self->_addError(CTM::Base::_myErrorMessage((caller 0)[3], 'DBI : ' . $self->{_DBI}->errstr()));
+            $self->_addError(CTM::Base::_myErrorMessage('disconnectFromDB', 'DBI : ' . $self->{_DBI}->errstr()));
         }
     } else {
-        $self->_addError(CTM::Base::_myErrorMessage((caller 0)[3], "impossible de clore la connexion car cette instance n'est pas connectee."));
+        $self->_addError(CTM::Base::_myErrorMessage('disconnectFromDB', "impossible de clore la connexion car cette instance n'est pas connectee."));
     }
     return 0;
 };
@@ -452,7 +445,7 @@ my $_disconnectFromDB = sub {
 #-> wrappers de constructeurs/destructeurs
 
 sub newSession {
-    croak(CTM::Base::_myErrorMessage((caller 0)[3], "la methode n'est pas correctement declaree.")) unless (@_ % 2);
+    croak(CTM::Base::_myErrorMessage('newSession', "usage : la methode n'est pas correctement declaree (une cle, une valeur).")) unless (@_ % 2);
     my $self = shift->$_newSessionConstructor(@_);
     lock_hash(%{$self});
     return $self;
@@ -479,7 +472,7 @@ sub disconnectFromDB {
 #-> methodes liees aux services du BIM
 
 sub getCurrentServices {
-    croak(CTM::Base::_myErrorMessage((caller 0)[3], "la methode n'est pas correctement declaree.")) unless (@_ % 2);
+    croak(CTM::Base::_myErrorMessage('getCurrentServices', "usage : la methode n'est pas correctement declaree (une cle, une valeur).")) unless (@_ % 2);
     my ($self, %params) = (shift, @_);
     $self->unshiftError();
     if ($self->getSessionIsConnected()) {
@@ -487,42 +480,44 @@ sub getCurrentServices {
         if ($situation) {
             my $time = time;
             for my $datacenter (keys %{$datacenterInfos}) {
-                ($situation, my $datacenterOdateStart, my $datacenterOdateEnd) = _calculStartEndDayTimeInPosixTimestamp($time, $datacenterInfos->{$datacenter}->{ctm_daily_time}, '*');
+                ($situation, my $datacenterOdateStart, my $datacenterOdateEnd) = _calculStartEndDayTimeInPosixTimestamp($time, $datacenterInfos->{$datacenter}->{ctm_daily_time});
                 if ($situation) {
                     if (defined (my $downloadTimeInTimestamp = CTM::Base::_dateToPosixTimestamp($datacenterInfos->{$datacenter}->{download_time_to_char}))) {
                         delete $datacenterInfos->{$datacenter} unless ($downloadTimeInTimestamp >= $datacenterOdateStart && $downloadTimeInTimestamp <= $datacenterOdateEnd);
                     } else {
-                        $self->_addError(CTM::Base::_myErrorMessage((caller 0)[3], "le champ 'download_time_to_char' qui derive de la cle 'download_time' (DATETIME) via la fonction SQL TO_CHAR() (Control-M '" . $datacenterInfos->{$datacenter}->{service_name} . "') n'est pas correct ou n'est pas gere par le module. Il est possible que la base de donnees du Control-M EM soit corrompue ou que la version renseignee (version '" . $self->{_ctmEMVersion} . "') ne soit pas correcte."));
+                        $self->_addError(CTM::Base::_myErrorMessage('getCurrentServices', "le champ 'download_time_to_char' qui derive de la cle 'download_time' (DATETIME) via la fonction SQL TO_CHAR() (Control-M '" . $datacenterInfos->{$datacenter}->{service_name} . "') n'est pas correct ou n'est pas gere par le module. Il est possible que la base de donnees du Control-M EM soit corrompue ou que la version renseignee (version '" . $self->{_ctmEMVersion} . "') ne soit pas correcte."));
                         return 0;
                     }
                 } else {
                     if ($datacenterOdateStart) {
-                        $self->_addError(CTM::Base::_myErrorMessage((caller 0)[3], "une erreur a eu lieu lors de la generation du timestamp POSIX pour la date de debut et de fin de la derniere montee au plan."));
+                        $self->_addError(CTM::Base::_myErrorMessage('getCurrentServices', "une erreur a eu lieu lors de la generation du timestamp POSIX pour la date de debut et de fin de la derniere montee au plan."));
                     } else {
-                        $self->_addError(CTM::Base::_myErrorMessage((caller 0)[3], "le champ 'ctm_daily_time' du datacenter '" . $datacenterInfos->{$datacenter}->{data_center} . "' n'est pas correct " . '(=~ /^[\+\-]\d{4}$/).'));
+                        $self->_addError(CTM::Base::_myErrorMessage('getCurrentServices', "le champ 'ctm_daily_time' du datacenter '" . $datacenterInfos->{$datacenter}->{data_center} . "' n'est pas correct " . '(=~ /^[\+\-]\d{4}$/).'));
                     }
                     return 0;
                 }
             }
-            ($situation, my $servicesDatas) = $_getAllServices->($self->{_DBI}, $datacenterInfos, exists $params{matching} ? $params{matching} : '%', exists $params{forLastNetName} ? $params{forLastNetName} : 0, exists $params{forStatus} ? $params{forStatus} : 0, exists $params{forDataCenters} ? $params{forDataCenters} : 0, $self->{verbose});
+            ($situation, my $servicesDatas) = $_getBIMServices->($self->{_DBI}, $datacenterInfos, exists $params{matching} ? $params{matching} : '%', exists $params{forLastNetName} ? $params{forLastNetName} : 0, exists $params{forStatus} ? $params{forStatus} : 0, exists $params{forDataCenters} ? $params{forDataCenters} : 0, $self->{verbose});
             unless ($situation) {
                 if (defined $servicesDatas) {
-                    $self->_addError(CTM::Base::_myErrorMessage((caller 0)[3], "erreur lors de la recuperation des services du BIM : la methode DBI 'execute()' a echoue : '" . $servicesDatas . "'."));
+                    $self->_addError(CTM::Base::_myErrorMessage('getCurrentServices', "erreur lors de la recuperation des services du BIM : la methode DBI 'execute()' a echoue : '" . $servicesDatas . "'."));
                     return 0;
+                } else {
+                    return {};
                 }
             }
-            return ref $servicesDatas eq 'HASH' ? $servicesDatas : {};
+            return $servicesDatas;
         } else {
-            $self->_addError(CTM::Base::_myErrorMessage((caller 0)[3], "erreur lors de la recuperation des informations a propos des Control-M Server : la methode DBI 'execute()' a echoue : '" . $datacenterInfos . "'.")) if (defined $datacenterInfos);
+            $self->_addError(CTM::Base::_myErrorMessage('getCurrentServices', "erreur lors de la recuperation des informations a propos des Control-M Server : la methode DBI 'execute()' a echoue : '" . $datacenterInfos . "'."));
         }
     } else {
-       $self->_addError(CTM::Base::_myErrorMessage((caller 0)[3], "impossible de continuer car la connexion au SGBD n'est pas active."));
+       $self->_addError(CTM::Base::_myErrorMessage('getCurrentServices', "impossible de continuer car la connexion au SGBD n'est pas active."));
     }
     return 0;
 }
 
 sub workOnCurrentServices {
-    croak(CTM::Base::_myErrorMessage((caller 0)[3], "la methode n'est pas correctement declaree.")) unless (@_ % 2);
+    croak(CTM::Base::_myErrorMessage('workOnCurrentServices', "usage : la methode n'est pas correctement declaree (une cle, une valeur).")) unless (@_ % 2);
     my $self = shift->$_subClassConstructor('CTM::ReadEM::_workOnBIMServices', 'getCurrentServices', @_);
     lock_hash(%{$self});
     return $self;
@@ -531,7 +526,7 @@ sub workOnCurrentServices {
 #-> methodes liees aux alarmes
 
 sub getAlarms {
-    croak(CTM::Base::_myErrorMessage((caller 0)[3], "la methode n'est pas correctement declaree.")) unless (@_ % 2);
+    croak(CTM::Base::_myErrorMessage('getAlarms', "usage : la methode n'est pas correctement declaree (une cle, une valeur).")) unless (@_ % 2);
     my ($self, %params) = (shift, @_);
     $self->unshiftError();
     if ($self->getSessionIsConnected()) {
@@ -539,16 +534,16 @@ sub getAlarms {
         if ($situation) {
             return $alarmsData;
         } else {
-            $self->_addError(CTM::Base::_myErrorMessage((caller 0)[3], "erreur lors de la recuperation des informations a propos des exceptions : la methode DBI 'execute()' a echoue : '" . $alarmsData . "'.")) if (defined $alarmsData);
+            $self->_addError(CTM::Base::_myErrorMessage('getAlarms', "erreur lors de la recuperation des informations a propos des exceptions : la methode DBI 'execute()' a echoue : '" . $alarmsData . "'."));
         }
     } else {
-        $self->_addError(CTM::Base::_myErrorMessage((caller 0)[3], "impossible de continuer car la connexion au SGBD n'est pas active."));
+        $self->_addError(CTM::Base::_myErrorMessage('getAlarms', "impossible de continuer car la connexion au SGBD n'est pas active."));
     }
     return 0;
 }
 
 sub workOnAlarms {
-    croak(CTM::Base::_myErrorMessage((caller 0)[3], "la methode n'est pas correctement declaree.")) unless (@_ % 2);
+    croak(CTM::Base::_myErrorMessage('workOnAlarms', "usage : la methode n'est pas correctement declaree (une cle, une valeur).")) unless (@_ % 2);
     my $self = shift->$_subClassConstructor('CTM::ReadEM::_workOnAlarms', 'getAlarms', @_);
     lock_hash(%{$self});
     return $self;
@@ -557,7 +552,7 @@ sub workOnAlarms {
 #-> methodes liees aux exceptions
 
 sub getExceptionAlerts {
-    croak(CTM::Base::_myErrorMessage((caller 0)[3], "la methode n'est pas correctement declaree.")) unless (@_ % 2);
+    croak(CTM::Base::_myErrorMessage('getExceptionAlerts', "usage : la methode n'est pas correctement declaree (une cle, une valeur).")) unless (@_ % 2);
     my ($self, %params) = (shift, @_);
     $self->unshiftError();
     if ($self->getSessionIsConnected()) {
@@ -565,16 +560,16 @@ sub getExceptionAlerts {
         if ($situation) {
             return $exceptionAlertsDatas;
         } else {
-            $self->_addError(CTM::Base::_myErrorMessage((caller 0)[3], "erreur lors de la recuperation des informations a propos des exceptions : la methode DBI 'execute()' a echoue : '" . $exceptionAlertsDatas . "'.")) if (defined $exceptionAlertsDatas);
+            $self->_addError(CTM::Base::_myErrorMessage('getExceptionAlerts', "erreur lors de la recuperation des informations a propos des exceptions : la methode DBI 'execute()' a echoue : '" . $exceptionAlertsDatas . "'."));
         }
     } else {
-        $self->_addError(CTM::Base::_myErrorMessage((caller 0)[3], "impossible de continuer car la connexion au SGBD n'est pas active."));
+        $self->_addError(CTM::Base::_myErrorMessage('getExceptionAlerts', "impossible de continuer car la connexion au SGBD n'est pas active."));
     }
     return 0;
 }
 
 sub workOnExceptionAlerts {
-    croak(CTM::Base::_myErrorMessage((caller 0)[3], "la methode n'est pas correctement declaree.")) unless (@_ % 2);
+    croak(CTM::Base::_myErrorMessage('workOnExceptionAlerts', "usage : la methode n'est pas correctement declaree (une cle, une valeur).")) unless (@_ % 2);
     my $self = shift->$_subClassConstructor('CTM::ReadEM::_workOnExceptionAlerts', 'getExceptionAlerts', @_);
     lock_hash(%{$self});
     return $self;
@@ -588,7 +583,7 @@ sub getSessionIsAlive {
     if ($self->{_DBI} && $self->getSessionIsConnected()) {
         return $self->{_DBI}->ping();
     } else {
-        $self->_addError(CTM::Base::_myErrorMessage((caller 0)[3], "impossible de tester l'etat de la connexion au SGBD car celle ci n'est pas active."));
+        $self->_addError(CTM::Base::_myErrorMessage('getSessionIsAlive', "impossible de tester l'etat de la connexion au SGBD car celle ci n'est pas active."));
     }
     return 0;
 }
@@ -904,17 +899,19 @@ Leve une exception (C<carp()>) si c'est une propriete privee ou si celle-ci n'ex
 
 =item - (*) - $obj->I<getError($item)>
 
-Retourne l'erreur a l'element C<$item> (0 par defaut, donc la derniere erreur generee) du tableau tableau de la reference '_errorArrayRef'.
+Retourne l'erreur a l'element C<$item> (0 par defaut, donc la derniere erreur generee) du tableau tableau de la reference '_errors'.
 
 Retourne C<undef> si il n'y a pas d'erreur ou si la derniere a ete decalee via la methode C<$obj-E<gt>unshiftError()>.
 
-Une partie des erreurs sont fatales (notamment le fait de ne pas correctement utiliser les methodes/fonctions)).
+Une partie des erreurs sont gerees via le module Carp et ses deux fonctions C<croak> et C<carp> (notamment le fait de ne pas correctement utiliser les methodes/fonctions)).
 
 =item - (*) - $obj->I<unshiftError()>
 
 Decale la valeur de la derniere erreur et la remplace par C<undef>.
 
 Retourne toujours 1.
+
+Cette methode est appelee avant l'execution des methodes C<connectToDB()>, C<disconnectFromDB()>, C<getCurrentServices()>, C<getAlarms()>, C<getExceptionAlerts()>, C<getSessionIsAlive()>, C<getProperty()> et C<setPublicProperty()>.
 
 =item - (*) - $obj->I<clearErrors()>
 
@@ -1008,7 +1005,7 @@ Retourne toujours 1.
 
 =item - Les elements prefixes de "_" sont proteges ou prives et ne doivent pas etre manipules par l'utilisateur.
 
-=item - Certaines fonctions normalements privees sont disponibles pour l'utilisateur mais ne sont pas documentees et peuvent etre fatales (pas de prototypage, pas de gestion des exceptions, ...).
+=item - Certaines fonctions normalements privees sont disponibles pour l'utilisateur mais ne sont pas documentees et peuvent etre fatales (pas forcement de prototypage, pas de gestion des exceptions, etc, ...).
 
 =item - Base Moose prevu pour la 0.20.
 

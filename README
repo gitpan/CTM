@@ -1,6 +1,4 @@
-# CTM::*
-
-Installation du module :
+Installation de CTM::* :
 
 - perl Makefile.PL
 - make

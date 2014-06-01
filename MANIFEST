@@ -1,3 +1,17 @@
+blib/arch/.exists
+blib/arch/auto/CTM/ReadEM/.exists
+blib/bin/.exists
+blib/lib/auto/CTM/ReadEM/.exists
+blib/lib/CTM/.exists
+blib/lib/CTM/Base.pm
+blib/lib/CTM/Base/SubClass.pm
+blib/lib/CTM/ReadEM.pm
+blib/lib/CTM/ReadEM/_workOnAlarms.pm
+blib/lib/CTM/ReadEM/_workOnBIMServices.pm
+blib/lib/CTM/ReadEM/_workOnExceptionAlerts.pm
+blib/man1/.exists
+blib/man3/.exists
+blib/script/.exists
 CHANGES
 lib/CTM/Base.pm
 lib/CTM/Base/SubClass.pm
@@ -15,4 +29,5 @@ META.json
 META.yml
 MYMETA.json
 MYMETA.yml
+pm_to_blib
 README

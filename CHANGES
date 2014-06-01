@@ -1,30 +1,32 @@
-CHANGES
+N.B :
+    - pour plus d'informations liées aux termes employés dans ce fichier, voir la documentation POD intégrée au module (perldoc/man CTM::ReadEM).
+    - les versions marquées de 'STABLE' ne sont pas garanties sans bugs.
 
-N.B : pour plus d'informations liées aux termes employés dans ce fichier, voir la documentation POD intégrée au module (perldoc CTM::ReadEM).
+CHANGEMENTS :
 
 - 0.09 et moins (STABLE) :
-    * < 23/03/2014 - versions instables, base du module en développement.
+    * < 23/03/2014 - tests.
 - 0.10 (STABLE) :
-    * 24/03/2014 - version stable, toutes les méthodes fonctionnent. Le champ 'DAYTIME' n'est pas pris en compte.
+    * 24/03/2014 - première version stable.
 - 0.11 (STABLE) :
     * 25/03/2014 - support de Control-M EM v6.
-    * 25/03/2014 - mise en place de la classe _BIMServices dont le constructeur est une méthode de Control-M EM::BIM.
-    * 31/03/2014 - méthodes de la classe 'soeur' _BIMServices misent en place.
-    * 07/04/2014 - modifications des méthodes liées à la classe Control-M EM::BIM et aux services : la récupération des services se fait désormais dynamiquement via l'active net.
+    * 25/03/2014 - mise en place du module _BIMServices dont le constructeur est une méthode de Control-M EM::BIM.
+    * 31/03/2014 - méthodes du module _BIMServices misent en place.
+    * 07/04/2014 - modifications des méthodes liées au module Control-M EM::BIM et aux services : la récupération des services se fait désormais dynamiquement via l'active net.
     * 17/04/2014 - refonte de la doc POD du module et d'une partie de la gestion des erreurs via Carp.
     * 23/04/2014 - gestion des jobs supprimés du plan via la clé 'delete_flag' (booleen) et avec le paramètre 'handleDeletedJobs' de la méthode getCurrentServices() et de ses dérivés.
 - 0.12 (STABLE) :
-    * 24/04/2014 - renommage de la classe _BIMServices en _WorkOnServices.
+    * 24/04/2014 - renommage du module _BIMServices en _WorkOnServices.
     * 24/04/2014 - refonte de l'espace de nom du module (Control-M EM::BIM -> CTM::EM::BIM::ServicesAPI) et de son nom (BIM.pm -> ServicesAPI.pm).
 - 0.13 (STABLE) :
-    * 07/05/2014 - ajout de la méthode getSOAPEnvelope() à la classe _WorkOnServices.
+    * 07/05/2014 - ajout de la méthode getSOAPEnvelope() au module _WorkOnServices.
     * 07/05/2014 - securisation des objets via Hash::Util et ajout d'un mutateur (setPublicProperty()) pour les proprietes publiques des objets.
     * 09/05/2014 - ajout de la methode getProperty().
 - 0.14 (STABLE) :
     * 09/05/2014 - module CTM::EM::BIM::ServicesAPI::Common fonctionnel. Contient les fonctions/méthodes _setObjProperty(), _myErrorMessage(), getProperty(), setPublicProperty() et clearError().
-    * 09/05/2014 - heritage de certaines fonctions pour les classes CTM::EM::BIM::ServicesAPI et _WorkOnServices depuis CTM::EM::BIM::ServicesAPI::Common.
+    * 09/05/2014 - heritage de certaines fonctions pour les modules CTM::EM::BIM::ServicesAPI et _WorkOnServices depuis CTM::EM::BIM::ServicesAPI::Common.
     * 20/05/2014 - ajout du parametre "verbose" à la methode newSession().
-    * 20/05/2014 - ajout de la methode refresh() à la classe _WorkOnServices.
+    * 20/05/2014 - ajout de la methode refresh() au module _WorkOnServices.
 - 0.15 (STABLE) :
     * 22/05/2014 - refonte de l'espace de nom pour les modules CTM::* (CTM::Base, CTM::ReadEM, CTM::ReadEM::_workOnBIMServices).
     * 22/05/2014 - certaines fonctions privées deviennent accessibles (_myOsIsUnix(), ...).
@@ -32,12 +34,16 @@ N.B : pour plus d'informations liées aux termes employés dans ce fichier, voir l
     * 26/05/2014 - ajout du paramètre 'forStatus' à la méthode getCurrentServices().
     * 26/05/2014 - POD revue pour l'upload des modules sur le CPAN.
 - 0.161 (STABLE) :
-    * 26/05/2014 - Correction de quelques bugs relatifs à la méthode $_setObjProperty->().
+    * 26/05/2014 - correction de quelques bugs relatifs à la méthode $_setObjProperty->().
 - 0.162 (STABLE) :
-    * 26/05/2014 - Héritage d'AUTOLOAD depuis CTM::Base.
+    * 26/05/2014 - héritage d'AUTOLOAD depuis CTM::Base.
 - 0.170 (STABLE) :
     * 30/05/2014 - ajout des modules CTM::ReadEM::_workOnAlarms, CTM::ReadEM::_workOnExceptionAlerts et CTM::Base::subClass + impacts majeures sur les modules CTM::ReadEM, CTM::Base et  CTM::ReadEM::_workOnBIMServices.
 - 0.171 (STABLE)
-    * 31/05/2014 - correction de quelques erreurs dans la POD de CTM::ReadEM et ajout du tag ':all' (%EXPORT_TAG) a ce meme module.
-- 0.1x :
+    * 31/05/2014 - correction de quelques erreurs dans la POD de CTM::ReadEM et ajout du tag ':all' (%EXPORT_TAG) à ce même module.
+- 0.172 (STABLE)
+    * 01/06/2014 - correction de la méthode protégée _refresh().
+    * 01/06/2014 - correction de plusieurs erreurs pour les méthodes getAlarms() et getExceptionAlerts() (paramètre 'severity').
+    * 01/06/2014 - limitation de l'utilisation de regex (gain de performance très faible).
+- 0.x :
     * ? - prise en compte du champ 'DAYTIME' avec ses variations (+/-) dans la fonction privée $_calculStartEndDayTimeInPosixTimestamp->().

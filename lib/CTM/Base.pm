@@ -44,20 +44,20 @@ use Time::Local;
 
 #----> ** variables de classe **
 
-our $VERSION = 0.171;
+our $VERSION = 0.172;
 our $AUTOLOAD;
 
 #----> ** fonctions privees (mais accessibles a l'utilisateur pour celles qui ne sont pas des references) **
 
-sub _uniqItemsArrayRef {
+sub _uniqItemsArrayRef($) {
   return [keys %{{map { $_ => undef } @{+shift}}}];
 }
 
-sub _isUnix {
-    return grep (/^${^O}$/i, qw/aix bsdos dgux dynixptx freebsd linux hpux irix openbsd dec_osf svr4 sco_sv svr4 unicos unicosmk solaris sunos netbsd sco3 ultrix macos rhapsody/);
+sub _isUnix() {
+    return grep /^${^O}$/i, qw/aix bsdos dgux dynixptx freebsd linux hpux irix openbsd dec_osf svr4 sco_sv svr4 unicos unicosmk solaris sunos netbsd sco3 ultrix macos rhapsody/;
 }
 
-sub _dateToPosixTimestamp {
+sub _dateToPosixTimestamp($) {
     my ($year, $mon, $day, $hour, $min, $sec) = split /[\/\-\s:]+/, shift;
     my $time = eval {
         timelocal($sec, $min, $hour, $day, $mon - 1, $year);
@@ -65,9 +65,9 @@ sub _dateToPosixTimestamp {
     return $time =~ /^\d+$/ ? $time : undef;
 }
 
-sub _myErrorMessage {
-    my ($nameSpace, $message) = @_;
-    return "'" . $nameSpace . "()' : " . $message;
+sub _myErrorMessage($$) {
+    my ($subroutine, $message) = @_;
+    return "'" . $subroutine . "()' : " . $message;
 }
 
 #----> ** methodes protegees **
@@ -82,22 +82,20 @@ sub _setObjProperty {
         $self->{$property} = $value;
         $action ? lock_value(%{$self}, $property) : lock_hash(%{$self});
         return 1;
-    } else {
-        carp(_myErrorMessage((caller 0)[3], "tentative d'utilisation d'une methode protegee."));
     }
+    carp(_myErrorMessage('_setObjProperty', "tentative d'utilisation d'une methode protegee."));
     return 0;
 }
 
 sub _addError {
     my ($self, $value) = @_;
     if (caller->isa(__PACKAGE__)) {
-        unlock_value(%{$self}, '_errorArrayRef');
-        unshift @{$self->{_errorArrayRef}}, $value;
-        lock_value(%{$self}, '_errorArrayRef');
+        unlock_value(%{$self}, '_errors');
+        unshift @{$self->{_errors}}, $value;
+        lock_value(%{$self}, '_errors');
         return 1;
-    } else {
-        carp(_myErrorMessage((caller 0)[3], "tentative d'utilisation d'une methode protegee."));
     }
+    carp(_myErrorMessage('_addError', "tentative d'utilisation d'une methode protegee."));
     return 0;
 }
 
@@ -107,28 +105,31 @@ sub _addError {
 
 sub getProperty {
     my ($self, $property) = @_;
-    if (exists $self->{$property}) {
-        return $self->{$property};
-    } else {
-        carp(_myErrorMessage((caller 0)[3], "propriete ('" . $property . "') inexistante."));
-    }
+    croak(_myErrorMessage('getProperty', "usage : \$obj->getProperty(\$propertyName).")) unless (defined $property);
+    $self->unshiftError();
+    return $self->{$property} if (exists $self->{$property});
+    carp(_myErrorMessage('getProperty', "propriete ('" . $property . "') inexistante."));
     return 0;
 }
 
 sub setPublicProperty {
     my ($self, $property, $value) = @_;
+    croak(_myErrorMessage('setPublicProperty', "usage : \$obj->setPublicProperty(\$propertyName, \$value).")) unless (defined $property);
+    $self->unshiftError();
     unless (exists $self->{$property}) {
-        carp(_myErrorMessage((caller 0)[3], "tentative de creation d'une propriete ('" . $property . "')."));
-    } elsif ($property =~ /^_/) {
-        carp(_myErrorMessage((caller 0)[3], "tentative de modication d'une propriete ('" . $property . "') protegee ou privee."));
+        carp(_myErrorMessage('setPublicProperty', "tentative de creation d'une propriete ('" . $property . "')."));
+    } elsif ((substr $property, 0, 1) eq '_') {
+        carp(_myErrorMessage('setPublicProperty', "tentative de modication d'une propriete ('" . $property . "') protegee ou privee."));
+    } else {
+        return $self->_setObjProperty($property, $value);
     }
-    return $self->_setObjProperty($property, $value);
+    return 0;
 }
 
 sub getError {
     my ($self, $arrayItem) = @_;
-    my $error = $self->{_errorArrayRef}->[(defined $arrayItem && $arrayItem =~ /^[\+\-]?\d+$/) ? $arrayItem : 0];
-    return defined $error ? $error : undef;
+    my $error = $self->{_errors}->[(defined $arrayItem && $arrayItem =~ /^[\+\-]?\d+$/) ? $arrayItem : 0];
+    return $error;
 }
 
 sub unshiftError {
@@ -137,9 +138,9 @@ sub unshiftError {
 
 sub clearErrors {
     my $self = shift;
-    unlock_value(%{$self}, '_errorArrayRef');
-    $self->{_errorArrayRef} = [];
-    lock_value(%{$self}, '_errorArrayRef');
+    unlock_value(%{$self}, '_errors');
+    $self->{_errors} = [];
+    lock_value(%{$self}, '_errors');
     return 1;
 }
 
@@ -150,7 +151,7 @@ sub AUTOLOAD {
     if ($AUTOLOAD) {
         no strict qw/refs/;
         (my $called = $AUTOLOAD) =~ s/.*:://;
-        croak("'" . $AUTOLOAD . "' : la methode '" . $called . "()' n'existe pas.") unless (exists $self->{$called});
+        croak("'" . $AUTOLOAD . "'() est introuvable.") unless (exists $self->{$called});
         return $self->{$called};
     }
     return undef;

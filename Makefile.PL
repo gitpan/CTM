@@ -32,6 +32,6 @@ WriteMakefile(
         'DBI'  => 0
     },
     'clean' => {
-        'FILES' => 'blib/* pm_to_blib MYMETA*'
+        'FILES' => 'blib/* pm_to_blib MYMETA* *.bak *.old'
     }
 );

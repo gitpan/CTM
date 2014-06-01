@@ -44,7 +44,7 @@ use Hash::Util qw/
 
 #----> ** variables de classe **
 
-our $VERSION = 0.171;
+our $VERSION = 0.172;
 
 #----> ** methodes protegees **
 
@@ -55,27 +55,26 @@ sub _refresh {
             my $selfTemp = $self->{'_CTM::ReadEM'}->$baseMethod(
                 %{$self->{'_CTM::ReadEM'}->{_params}}
             );
-            if (defined $self->{'_CTM::ReadEM'}->{_errorArrayRef}) {
-                $self->_addError($self->{'_CTM::ReadEM'}->{_errorArrayRef});
-            } else {
-                $self->{'_CTM::ReadEM'}->unshiftError();
-                $selfTemp->_addError($self->{_errorArrayRef});
-                unlock_hash(%{$self});
-                $self = $selfTemp;
-                lock_hash(%{$self});
-                return 1;
-            }
+            my $_errorsTemp = $self->{_errors};
+            unlock_hash(%{$self});
+            $self = $selfTemp;
+            $self->{_errors} = $_errorsTemp;
+            lock_hash(%{$self});
+            return 1;
         }
-    } else {
-        carp(_myErrorMessage((caller 0)[3], "tentative d'utilisation d'une methode protegee."));
     }
+    carp(_myErrorMessage('_refresh', "tentative d'utilisation d'une methode protegee."));
     return 0;
 }
 
 #----> ** methodes publiques **
 
 sub countItems {
-    return scalar keys %{shift->{_datas}};
+    my $self = shift;
+    if (ref $self->{_datas} eq 'HASH') {
+        return scalar keys %{$self->{_datas}};
+    }
+    return 0;
 }
 
 #-> accesseurs/mutateurs
