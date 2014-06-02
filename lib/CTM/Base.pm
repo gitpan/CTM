@@ -44,7 +44,7 @@ use Time::Local;
 
 #----> ** variables de classe **
 
-our $VERSION = 0.173;
+our $VERSION = 0.174;
 our $AUTOLOAD;
 
 #----> ** fonctions privees (mais accessibles a l'utilisateur pour celles qui ne sont pas des references) **
@@ -151,7 +151,7 @@ sub AUTOLOAD {
     if ($AUTOLOAD) {
         no strict qw/refs/;
         (my $called = $AUTOLOAD) =~ s/.*:://;
-        croak("'" . $AUTOLOAD . "'() est introuvable.") unless (exists $self->{$called});
+        croak("'" . $AUTOLOAD . "()' est introuvable.") unless (exists $self->{$called});
         return $self->{$called};
     }
     return undef;

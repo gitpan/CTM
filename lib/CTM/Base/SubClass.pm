@@ -44,26 +44,25 @@ use Hash::Util qw/
 
 #----> ** variables de classe **
 
-our $VERSION = 0.173;
+our $VERSION = 0.174;
 
 #----> ** methodes protegees **
 
 sub _refresh {
     my ($self, $baseMethod) = @_;
     if (caller->isa(__PACKAGE__)) {
-        while ($self->{_working}) {
-            my $selfTemp = $self->{'_CTM::ReadEM'}->$baseMethod(
-                %{$self->{'_CTM::ReadEM'}->{_params}}
-            );
-            my $_errorsTemp = $self->{_errors};
-            unlock_hash(%{$self});
-            $self = $selfTemp;
-            $self->{_errors} = $_errorsTemp;
-            lock_hash(%{$self});
-            return 1;
-        }
+        sleep 1 while ($self->{_working});
+		my $selfTemp = $self->{'_CTM::ReadEM'}->$baseMethod(
+			%{$self->{_params}}
+		);
+		my $_errorsTemp = $self->{_errors};
+		$self = $selfTemp;
+		unlock_hash(%{$self});
+		$self->{_errors} = $_errorsTemp;
+		lock_hash(%{$self});
+		return 1;	
     }
-    carp(CTM::Base::_myErrorMessage('_refresh', "tentative d'utilisation d'une methode protegee."));
+	carp(CTM::Base::_myErrorMessage('_refresh', "tentative d'utilisation d'une methode protegee."));
     return 0;
 }
 

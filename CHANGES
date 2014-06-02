@@ -48,5 +48,7 @@ CHANGEMENTS :
 - 0.173 (STABLE)
     * 02/06/2014 - apport des paramètres "limit" et "timeSort" aux méthodes getAlarms() et getExceptionAlerts() ainsi qu'à leurs dérivés.
     * 02/06/2014 - amélioration de la vérification de certains paramètres pour les méthodes newSession() et get*.
+- 0.174 (STABLE)
+    * 02/06/2014 - correction de la méthode protégée _refresh().
 - 0.x :
     * ? - prise en compte du champ 'DAYTIME' avec ses variations (+/-) dans la fonction privée $_calculStartEndDayTimeInPosixTimestamp->().
