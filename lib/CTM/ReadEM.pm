@@ -37,9 +37,9 @@ use base qw/
     CTM::Base
 /;
 
-use CTM::ReadEM::_workOnBIMServices 0.174;
-use CTM::ReadEM::_workOnAlarms 0.174;
-use CTM::ReadEM::_workOnExceptionAlerts 0.174;
+use CTM::ReadEM::_workOnBIMServices 0.175;
+use CTM::ReadEM::_workOnAlarms 0.175;
+use CTM::ReadEM::_workOnExceptionAlerts 0.175;
 
 use Carp qw/
     carp
@@ -58,7 +58,7 @@ use DBI;
 
 #----> ** variables de classe **
 
-our $VERSION = 0.174;
+our $VERSION = 0.175;
 our @EXPORT_OK = qw/
     $VERSION
     getStatusColorForService
@@ -916,7 +916,7 @@ Decale la valeur de la derniere erreur et la remplace par C<undef>.
 
 Retourne toujours 1.
 
-Cette methode est appelee avant l'execution des methodes C<connectToDB()>, C<disconnectFromDB()>, C<getCurrentServices()>, C<getAlarms()>, C<getExceptionAlerts()>, C<getSessionIsAlive()>, C<getProperty()> et C<setPublicProperty()>.
+Cette methode est appelee avant l'execution des methodes C<connectToDB()>, C<disconnectFromDB()>, C<getCurrentServices()>, C<getAlarms()>, C<getExceptionAlerts()>, C<getSessionIsAlive()>, C<getProperty()>, C<setPublicProperty()>, C<getAlerts()>, C<getProblematicsJobs()> et C<getSOAPEnvelope()>.
 
 =item - (*) - $obj->I<clearErrors()>
 

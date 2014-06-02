@@ -41,7 +41,7 @@ use Hash::Util qw/
 
 #----> ** variables de classe **
 
-our $VERSION = 0.174;
+our $VERSION = 0.175;
 
 #----> ** fonctions privees (mais accessibles a l'utilisateur pour celles qui ne sont pas des references) **
 
@@ -64,6 +64,7 @@ my $_getAllViaLogID = sub {
 my $_getFromRequest = sub {
     my ($self, $childSub, $sqlRequestSelectFrom, $errorType) = @_;
     $self->_setObjProperty('_working', 1);
+	$self->unshiftError();
     if ($self->{'_CTM::ReadEM'}->getSessionIsConnected()) {
         if ($self->{_datas}) {
             if (my @servicesLogID = keys %{$self->{_datas}}) {
@@ -99,6 +100,7 @@ sub refresh {
 sub getSOAPEnvelope {
     my $self = shift;
     $self->_setObjProperty('_working', 1);
+	$self->unshiftError();
     if ($self->{_datas}) {
         my $XMLStr = <<XML;
 <?xml version="1.0" encoding="iso-8859-1"?>
