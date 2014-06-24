@@ -1,5 +1,5 @@
 #------------------------------------------------------------------------------------------------------
-# OBJET : "Classe abstraite" des sous-classes de CTM::ReadEM
+# OBJET : "Classe abstraite" des modules de CTM::ReadEM::*
 #------------------------------------------------------------------------------------------------------
 # APPLICATION : Control-M
 #------------------------------------------------------------------------------------------------------
@@ -12,12 +12,11 @@
 #------------------------------------------------------------------------------------------------------
 # DEPENDANCES OBLIGATOIRES
 #   - CTM::Base
-#   - CTM::Base::SubClass
 #   - Carp
 #   - Hash::Util
 #------------------------------------------------------------------------------------------------------
 # ATTENTION
-#   "Classe abstraite" des sous-classes de CTM::ReadEM. Ce module n'a pas pour but d'etre charge par l'utilisateur
+#   Ce module n'a pas pour but d'etre charge par l'utilisateur
 #------------------------------------------------------------------------------------------------------
 
 #-> BEGIN
@@ -44,7 +43,7 @@ use Hash::Util qw/
 
 #----> ** variables de classe **
 
-our $VERSION = 0.175;
+our $VERSION = 0.176;
 
 #----> ** methodes protegees **
 
@@ -52,17 +51,48 @@ sub _refresh {
     my ($self, $baseMethod) = @_;
     if (caller->isa(__PACKAGE__)) {
         sleep 1 while ($self->{_working});
-		my $selfTemp = $self->{'_CTM::ReadEM'}->$baseMethod(
-			%{$self->{_params}}
-		);
-		my $_errorsTemp = $self->{_errors};
-		$self = $selfTemp;
-		unlock_hash(%{$self});
-		$self->{_errors} = $_errorsTemp;
-		lock_hash(%{$self});
-		return 1;	
+        my $selfTemp = $self->{'_CTM::ReadEM'}->$baseMethod(
+            %{$self->{_params}}
+        );
+        my $_errorsTemp = $self->{_errors};
+        $self = $selfTemp;
+        unlock_hash(%{$self});
+        $self->{_errors} = $_errorsTemp;
+        lock_hash(%{$self});
+        return 1;
     }
-	carp(CTM::Base::_myErrorMessage('_refresh', "tentative d'utilisation d'une methode protegee."));
+    carp(CTM::Base::_myErrorMessage('_refresh', "tentative d'utilisation d'une methode protegee."));
+    return 0;
+}
+
+#-> methodes en rapport avec les alarmes/alertes
+
+sub _setSerials {
+    my ($self, $baseMethod, $baseConstructor, $errorType, $sqlRequest, $serialID) = @_;
+    if (caller->isa(__PACKAGE__)) {
+        $self->_setObjProperty('_working', 1);
+        $self->unshiftError();
+        if ($self->{'_CTM::ReadEM'}->getSessionIsConnected()) {
+            if ($self->{_datas}) {
+                $serialID = [keys %{$self->{_datas}}] unless (defined $serialID && ref $serialID eq 'ARRAY');
+                $sqlRequest .= " WHERE serial IN ('" . join("', '", @{$serialID}) . "');";
+                print "VERBOSE - _setSerials() :\n\n" . $sqlRequest . "\n" if ($self->{'_CTM::ReadEM'}->{verbose}); 
+                if ($self->{'_CTM::ReadEM'}->{_DBI}->do($sqlRequest)) {
+                    $self->_setObjProperty('_working', 0);
+                    return 1;
+                } else {
+                    $self->_addError(CTM::Base::_myErrorMessage($baseMethod, "la connexion est etablie mais la methode DBI 'do()' a echouee : '" . $self->{'_CTM::ReadEM'}->{_DBI}->errstr() . "'."));
+                }
+            } else {
+                $self->_addError(CTM::Base::_myErrorMessage($baseMethod, "impossible de prendre en compte les '" . $errorType . "' car ces elements n'ont pas etre generer via la methode '" . $baseConstructor . "()'."));
+            }
+        } else {
+            $self->_addError(CTM::Base::_myErrorMessage($baseMethod, "impossible de continuer car la connexion au SGBD n'est pas active."));
+        }
+        $self->_setObjProperty('_working', 0);
+    } else {
+        carp(CTM::Base::_myErrorMessage('_setSerials', "tentative d'utilisation d'une methode protegee."));
+    }
     return 0;
 }
 
@@ -102,7 +132,7 @@ C<CTM::Base::SubClass>
 
 =head1 SYNOPSIS
 
-"Classe abstraite" des sous-classes de C<CTM::ReadEM>.
+"Classe abstraite" des modules C<CTM::ReadEM::*>.
 Pour plus de details, voir la documention POD de C<CTM::ReadEM>.
 
 =head1 DEPENDANCES
@@ -111,7 +141,7 @@ C<CTM::Base>, C<Carp>, C<Hash::Util>
 
 =head1 NOTES
 
-Ce module est dedie aux sous-classes de C<CTM::ReadEM>.
+Ce module est dedie aux modules de C<CTM::ReadEM::*>.
 
 =head1 AUTEUR
 

@@ -4,3 +4,10 @@ Installation de CTM::* :
 - make
 - make install
 - make clean
+
+Sources disponibles sur :
+
+- http://search.cpan.org/dist/CTM
+- http://github.com/WeebleDev/CTM
+
+Pour toutes autres informations, voir la POD du module ReadEM.pm

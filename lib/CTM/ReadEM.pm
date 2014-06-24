@@ -12,9 +12,9 @@
 #------------------------------------------------------------------------------------------------------
 # DEPENDANCES OBLIGATOIRES
 #   - CTM::Base
-#   - CTM::ReadEM::_workOnBIMServices
-#   - CTM::ReadEM::_workOnAlarms
-#   - CTM::ReadEM::_workOnExceptionAlerts
+#   - CTM::ReadEM::WorkOnBIMServices
+#   - CTM::ReadEM::WorkOnAlarms
+#   - CTM::ReadEM::WorkOnExceptionAlerts
 #   - Carp
 #   - Hash::Util
 #   - Exporter
@@ -37,9 +37,9 @@ use base qw/
     CTM::Base
 /;
 
-use CTM::ReadEM::_workOnBIMServices 0.175;
-use CTM::ReadEM::_workOnAlarms 0.175;
-use CTM::ReadEM::_workOnExceptionAlerts 0.175;
+use CTM::ReadEM::WorkOnBIMServices 0.176;
+use CTM::ReadEM::WorkOnAlarms 0.176;
+use CTM::ReadEM::WorkOnExceptionAlerts 0.176;
 
 use Carp qw/
     carp
@@ -58,7 +58,7 @@ use DBI;
 
 #----> ** variables de classe **
 
-our $VERSION = 0.175;
+our $VERSION = 0.176;
 our @EXPORT_OK = qw/
     $VERSION
     getStatusColorForService
@@ -81,7 +81,7 @@ my %_sessionsState = (
 sub _calculStartEndDayTimeInPosixTimestamp($$) {
     my ($time, $ctmDailyTime) = @_;
     if ($ctmDailyTime =~ /[\+\-]\d{4}$/) {
-        my ($ctmDailyPreviousOrNext, $ctmDailyHour, $ctmDailyMin) = ((substr $ctmDailyTime, 0, 1), unpack '(a2)*', substr $ctmDailyTime, 1, 4);
+        my ($ctmDailyPreviousOrNext, $ctmDailyHour, $ctmDailyMin) = (substr($ctmDailyTime, 0, 1), unpack '(a2)*', substr $ctmDailyTime, 1, 4);
         # $ctmDailyPreviousOrNext : a utiliser pour la gestion du '+-' du champ 'DAYTIME'
         my ($minNow, $hoursNow, $dayNow, $monthNow, $yearNow) = split /\s+/, strftime('%M %H %d %m %Y', localtime $time);
         my ($previousDay, $previousDayMonth, $previousDayYear) = split /\s+/, strftime('%d %m %Y', localtime $time - 86400);
@@ -159,12 +159,12 @@ WHERE log_id IN (
 AND service_name LIKE '$matching'
 AND order_id IN (
 SQL
-        $sqlRequest .= (join "\n    UNION\n", map { '    SELECT order_id FROM ' . $_->{active_net_table_name} . " WHERE appl_type = 'BIM'" } values %{$datacenterInfos}) . "\n)\n";
+        $sqlRequest .= join("\n    UNION\n", map { '    SELECT order_id FROM ' . $_->{active_net_table_name} . " WHERE appl_type = 'BIM'" } values %{$datacenterInfos}) . "\n)\n";
         if ($forLastNetName) {
-            $sqlRequest .= "AND active_net_name IN ('" . (join "', '", map { $_->{netname} } values %{$datacenterInfos}) . "')\n";
+            $sqlRequest .= "AND active_net_name IN ('" . join("', '", map { $_->{netname} } values %{$datacenterInfos}) . "')\n";
         }
         if (ref $serviceStatus eq 'ARRAY' && @{$serviceStatus}) {
-            $sqlRequest .= 'AND (' . (join ' OR ', map {
+            $sqlRequest .= 'AND (' . join(' OR ', map {
                 if ($_ eq 'OK') {
                     "status_to = '4'";
                 } elsif ($_ eq 'Completed_OK') {
@@ -179,7 +179,7 @@ SQL
             } @{CTM::Base::_uniqItemsArrayRef($serviceStatus)}) . ")\n";
         }
         if (ref $forDataCenters eq 'ARRAY' && @{$forDataCenters}) {
-            $sqlRequest .= 'AND (' . (join ' OR ', map { "data_center = '" . $_ . "'" } @{CTM::Base::_uniqItemsArrayRef($forDataCenters)}) . ")\nORDER BY service_name;\n";
+            $sqlRequest .= 'AND (' . join(' OR ', map { "data_center = '" . $_ . "'" } @{CTM::Base::_uniqItemsArrayRef($forDataCenters)}) . ")\nORDER BY service_name;\n";
         }
         print "VERBOSE - \$_getBIMServices->() :\n\n" . $sqlRequest if ($verbose);
         my $sth = $dbh->prepare($sqlRequest);
@@ -200,7 +200,7 @@ FROM alarm
 WHERE message LIKE '$matching'
 SQL
     if (ref $severity eq 'ARRAY' && @{$severity}) {
-        $sqlRequest .= 'AND (' . (join ' OR ', map {
+        $sqlRequest .= 'AND (' . join(' OR ', map {
             if ($_ eq 'Regular') {
                 "severity = 'R'";
             } elsif ($_ eq 'Urgent') {
@@ -229,7 +229,7 @@ FROM exception_alerts
 WHERE message LIKE '$matching'
 SQL
     if (ref $severity eq 'ARRAY' && @{$severity}) {
-        $sqlRequest .= 'AND (' . (join ' OR ', map {
+        $sqlRequest .= 'AND (' . join(' OR ', map {
             if ($_ eq 'Warning') {
                 "xseverity = '3'";
             } elsif ($_ eq 'Error') {
@@ -306,7 +306,7 @@ sub getNbSessionsConnected {
 #-> constructeurs/destructeurs (methode privee)
 
 my $_newSessionConstructor = sub {
-    my ($class, %params) = (shift, @_);
+    my ($class, %params) = @_;
     my $self = {};
     if (exists $params{ctmEMVersion} && exists $params{DBMSType} && exists $params{DBMSAddress} && exists $params{DBMSPort} && exists $params{DBMSInstance} && exists $params{DBMSUser}) {
         $self->{_ctmEMVersion} = $params{ctmEMVersion};
@@ -330,7 +330,7 @@ my $_newSessionConstructor = sub {
 };
 
 my $_subClassConstructor = sub {
-    my ($self, $SubClass, $baseMethod, %params) = (shift, @_);
+    my ($self, $SubClass, $baseMethod, %params) = @_;
     my $subSelf = {};
     $subSelf->{'_CTM::ReadEM'} = $self;
     $subSelf->{_working} = 0;
@@ -399,10 +399,10 @@ my $_connectToDB = sub {
                             $_sessionsState{nbSessionsConnected}++;
                             return 1;
                         } else {
-                            $self->_addError(CTM::Base::_myErrorMessage('connectToDB', "la connexion au SGBD est etablie mais il manque une ou plusieurs tables ('" . (join "', '", @{$inexistingSQLTables}) . "') qui sont requises ."));
+                            $self->_addError(CTM::Base::_myErrorMessage('connectToDB', "la connexion au SGBD est etablie mais il manque une ou plusieurs tables ('" . join("', '", @{$inexistingSQLTables}) . "') qui sont requises ."));
                         }
                     } else {
-                        $self->_addError(CTM::Base::_myErrorMessage('connectToDB', "la connexion est etablie mais la ou les methodes DBI 'execute()' ont echouees : '" . $inexistingSQLTables . "'."));
+                        $self->_addError(CTM::Base::_myErrorMessage('connectToDB', "la connexion est etablie mais la DBI 'execute()' a echouee : '" . $inexistingSQLTables . "'."));
                     }
                 } else {
                     $@ =~ s/\s+/ /g;
@@ -470,7 +470,7 @@ sub disconnectFromDB {
 
 sub getCurrentServices {
     croak(CTM::Base::_myErrorMessage('getCurrentServices', "usage : la methode n'est pas correctement declaree (une cle, une valeur).")) unless (@_ % 2);
-    my ($self, %params) = (shift, @_);
+    my ($self, %params) = @_;
     $self->unshiftError();
     if ($self->getSessionIsConnected()) {
         my ($situation, $datacenterInfos) = $_getDatasCentersInfos->($self->{_DBI}, exists $params{handleDeletedJobs} ? $params{handleDeletedJobs} : 0, $self->{verbose});
@@ -515,7 +515,7 @@ sub getCurrentServices {
 
 sub workOnCurrentServices {
     croak(CTM::Base::_myErrorMessage('workOnCurrentServices', "usage : la methode n'est pas correctement declaree (une cle, une valeur).")) unless (@_ % 2);
-    my $self = shift->$_subClassConstructor('CTM::ReadEM::_workOnBIMServices', 'getCurrentServices', @_);
+    my $self = shift->$_subClassConstructor('CTM::ReadEM::WorkOnBIMServices', 'getCurrentServices', @_);
     lock_hash(%{$self});
     return $self;
 }
@@ -524,7 +524,7 @@ sub workOnCurrentServices {
 
 sub getAlarms {
     croak(CTM::Base::_myErrorMessage('getAlarms', "usage : la methode n'est pas correctement declaree (une cle, une valeur).")) unless (@_ % 2);
-    my ($self, %params) = (shift, @_);
+    my ($self, %params) = @_;
     $self->unshiftError();
     if ($self->getSessionIsConnected()) {
         my ($situation, $alarmsData) = $_getAlarms->($self->{_DBI}, exists $params{matching} && defined $params{matching} ? $params{matching} : '%', exists $params{severity} ? $params{severity} : 0, exists $params{limit} && defined $params{limit} && $params{limit} =~ /^\d+$/ ? $params{limit} : 0, exists $params{timeSort} && defined $params{timeSort} && $params{timeSort} =~ /^ASC|DESC$/i ? $params{timeSort} : 'ASC', $self->{verbose});
@@ -541,7 +541,7 @@ sub getAlarms {
 
 sub workOnAlarms {
     croak(CTM::Base::_myErrorMessage('workOnAlarms', "usage : la methode n'est pas correctement declaree (une cle, une valeur).")) unless (@_ % 2);
-    my $self = shift->$_subClassConstructor('CTM::ReadEM::_workOnAlarms', 'getAlarms', @_);
+    my $self = shift->$_subClassConstructor('CTM::ReadEM::WorkOnAlarms', 'getAlarms', @_);
     lock_hash(%{$self});
     return $self;
 }
@@ -550,7 +550,7 @@ sub workOnAlarms {
 
 sub getExceptionAlerts {
     croak(CTM::Base::_myErrorMessage('getExceptionAlerts', "usage : la methode n'est pas correctement declaree (une cle, une valeur).")) unless (@_ % 2);
-    my ($self, %params) = (shift, @_);
+    my ($self, %params) = @_;
     $self->unshiftError();
     if ($self->getSessionIsConnected()) {
         my ($situation, $exceptionAlertsDatas) = $_getExceptionAlerts->($self->{_DBI}, exists $params{matching} && defined $params{matching} ? $params{matching} : '%', exists $params{severity} ? $params{severity} : 0, exists $params{limit} && defined $params{limit} && $params{limit} =~ /^\d+$/ ? $params{limit} : 0, exists $params{timeSort} && defined $params{timeSort} && $params{timeSort} =~ /^ASC|DESC$/i ? $params{timeSort} : 'ASC', $self->{verbose});
@@ -567,7 +567,7 @@ sub getExceptionAlerts {
 
 sub workOnExceptionAlerts {
     croak(CTM::Base::_myErrorMessage('workOnExceptionAlerts', "usage : la methode n'est pas correctement declaree (une cle, une valeur).")) unless (@_ % 2);
-    my $self = shift->$_subClassConstructor('CTM::ReadEM::_workOnExceptionAlerts', 'getExceptionAlerts', @_);
+    my $self = shift->$_subClassConstructor('CTM::ReadEM::WorkOnExceptionAlerts', 'getExceptionAlerts', @_);
     lock_hash(%{$self});
     return $self;
 }
@@ -620,39 +620,39 @@ Voir la section EXEMPLES.
 
 =head1 DEPENDANCES
 
-C<CTM::Base>, C<CTM::ReadEM::_workOnBIMServices>, C<CTM::ReadEM::_workOnAlarms>, C<CTM::ReadEM::_workOnExceptionAlerts>, C<Carp>, C<Hash::Util>, C<Exporter>, C<Time::Local>, C<POSIX>, C<DBI>, C<DBD::?>
+C<CTM::Base>, C<CTM::ReadEM::WorkOnBIMServices>, C<CTM::ReadEM::WorkOnAlarms>, C<CTM::ReadEM::WorkOnExceptionAlerts>, C<Carp>, C<Hash::Util>, C<Exporter>, C<Time::Local>, C<POSIX>, C<DBI>, C<DBD::?>
 
 =head1 PROPRIETES PUBLIQUES (C<CTM::ReadEM>)
 
 =over
 
-=item - $session-I<{DBMSType}>
+=item - $session->I<{DBMSType}>
 
 Type de SGBD du Control-M EM auquel se connecter.
 
 Les valeurs acceptees sont "Pg", "Oracle", "mysql", "Sybase" et "ODBC". Pour une connexion a MS SQL Server, les drivers "Sybase" et "ODBC" fonctionnent.
 
-=item - $session-I<{DBMSAddress}>
+=item - $session->I<{DBMSAddress}>
 
 Adresse du SGBD du Control-M EM auquel se connecter.
 
-=item - $session-I<{DBMSPort}>
+=item - $session->I<{DBMSPort}>
 
 Port du SGBD du Control-M EM auquel se connecter.
 
-=item - $session-I<{DBMSInstance}>
+=item - $session->I<{DBMSInstance}>
 
 Instance (ou base) du SGBD du Control-M EM auquel se connecter.
 
-=item - $session-I<{DBMSUser}>
+=item - $session->I<{DBMSUser}>
 
 Utilisateur du SGBD du Control-M EM auquel se connecter.
 
-=item - $session-I<{DBMSPassword}>
+=item - $session->I<{DBMSPassword}>
 
 Mot de passe du SGBD du Control-M EM auquel se connecter.
 
-=item - $session-I<{DBMSTimeout}>
+=item - $session->I<{DBMSTimeout}>
 
 Timeout (en seconde) de la tentavive de connexion au SGBD du Control-M EM.
 
@@ -750,7 +750,7 @@ Derive de la methode C<$session-E<gt>getCurrentServices()>, elle "herite" donc d
 
 Retourne toujours un objet.
 
-Fonctionne de la meme maniere que la methode C<$session-E<gt>getCurrentServices()> mais elle est surtout le constructeur du module C<CTM::ReadEM::_workOnBIMServices> qui met a disposition les methodes suivantes :
+Fonctionne de la meme maniere que la methode C<$session-E<gt>getCurrentServices()> mais elle est surtout le constructeur du module C<CTM::ReadEM::WorkOnBIMServices> qui met a disposition les methodes suivantes :
 
 =over
 
@@ -771,6 +771,8 @@ Retourne 1 si le rafraichissement a fonctionne ou 0 si celui-ci a echoue.
 =item - (BIM) - $workOnServices->I<getSOAPEnvelope()>
 
 Retourne une reference vers une chaine de caractere au format XML (enveloppe SOAP de la liste des services du BIM).
+
+Une reference vers un tableau d'ID ('log_id') peut etre passee en parametre afin de filtrer le ou les services a utiliser pour generer la chaine de caractere au format XML.
 
 Retourne 0 si la methode a echouee.
 
@@ -810,7 +812,7 @@ Derive de la methode C<$session-E<gt>getAlarms()>, elle "herite" donc de ses par
 
 Retourne toujours un objet.
 
-Fonctionne de la meme maniere que la methode C<$session-E<gt>getAlarms()> mais elle est surtout le constructeur du module C<CTM::ReadEM::_workOnAlarms> qui met a disposition les methodes suivantes :
+Fonctionne de la meme maniere que la methode C<$session-E<gt>getAlarms()> mais elle est surtout le constructeur du module C<CTM::ReadEM::WorkOnAlarms> qui met a disposition les methodes suivantes :
 
 =over
 
@@ -827,6 +829,62 @@ Retourne une reference de la table de hachage de la liste des alarmes de l'objet
 Rafraichi l objet C<$workOnAlarms> avec les parametres passes lors de la creation de l'objet C<$workOnAlarms>.
 
 Retourne 1 si le rafraichissement a fonctionne ou 0 si celui-ci a echoue.
+
+=item - (GAS) - $workOnAlarms->I<notice(\@array_ref_of_id)>
+
+Notifie la ou les alarmes.
+
+Une reference vers un tableau d'ID ('serial') peut etre passee en parametre afin de filtrer les alarmes a traiter.
+
+Retourne 1 si l'operation a fonctionnee sinon 0.
+
+=item - (GAS) - $workOnAlarms->I<unnotice(\@array_ref_of_id)>
+
+Denotifie la ou les alarmes.
+
+Une reference vers un tableau d'ID ('serial') peut etre passee en parametre afin de filtrer les alarmes a traiter.
+
+Retourne 1 si l'operation a fonctionnee sinon 0.
+
+=item - (GAS) - $workOnAlarms->I<handle(\@array_ref_of_id)>
+
+Prend en compte la ou les alarmes.
+
+Une reference vers un tableau d'ID ('serial') peut etre passee en parametre afin de filtrer les alarmes a traiter.
+
+Retourne 1 si l'operation a fonctionnee sinon 0.
+
+=item - (GAS) - $workOnAlarms->I<unhandle(\@array_ref_of_id)>
+
+Annule la prise en compte du ou des alarmes.
+
+Une reference vers un tableau d'ID ('serial') peut etre passee en parametre afin de filtrer les alarmes a traiter.
+
+Retourne 1 si l'operation a fonctionnee sinon 0.
+
+=item - (GAS) - $workOnAlarms->I<delete(\@array_ref_of_id)>
+
+Supprime la ou les alarmes.
+
+Une reference vers un tableau d'ID ('serial') peut etre passee en parametre afin de filtrer les alarmes a traiter.
+
+Retourne 1 si l'operation a fonctionnee sinon 0.
+
+=item - (GAS) - $workOnAlarms->I<setSeverity($severity, \@array_ref_of_id)>
+
+Modifie la severite du ou des alarmes. Les valeurs possibles sont 'R' (Regular), 'U' (Urgent) et 'V' (Very Urgent).
+
+Une reference vers un tableau d'ID ('serial') peut etre passee en parametre afin de filtrer les alarmes a traiter.
+
+Retourne 1 si l'operation a fonctionnee sinon 0.
+
+=item - (GAS) - $workOnAlarms->I<setNote($note, \@array_ref_of_id)>
+
+La note de ou des alarmes est egale a C<$note>.
+
+Une reference vers un tableau d'ID ('serial') peut etre passee en parametre afin de filtrer les alarmes a traiter.
+
+Retourne 1 si l'operation a fonctionnee sinon 0.
 
 =back
 
@@ -852,7 +910,7 @@ Derive de la methode C<$session-E<gt>getExceptionAlerts()>, elle "herite" donc d
 
 Retourne toujours un objet.
 
-Fonctionne de la meme maniere que la methode C<$session-E<gt>getExceptionAlerts()> mais elle est surtout le constructeur du module C<CTM::ReadEM::_workOnExceptionAlerts> qui met a disposition les methodes suivantes :
+Fonctionne de la meme maniere que la methode C<$session-E<gt>getExceptionAlerts()> mais elle est surtout le constructeur du module C<CTM::ReadEM::WorkOnExceptionAlerts> qui met a disposition les methodes suivantes :
 
 =over
 
@@ -869,6 +927,38 @@ Retourne une reference de la table de hachage de la liste des alertes de l'objet
 Rafraichi l objet C<$workOnExceptionAlerts> avec les parametres passes lors de la creation de l'objet C<$workOnExceptionAlerts>.
 
 Retourne 1 si le rafraichissement a fonctionne ou 0 si celui-ci a echoue.
+
+=item - (EA) - $workOnAlarms->I<handle(\@array_ref_of_id)>
+
+Prend en compte la ou les alertes.
+
+Une reference vers un tableau d'ID ('serial') peut etre passee en parametre afin de filtrer les alertes a traiter.
+
+Retourne 1 si l'operation a fonctionnee sinon 0.
+
+=item - (EA) - $workOnAlarms->I<unhandle(\@array_ref_of_id)>
+
+Annule la prise en compte d'une ou des alertes.
+
+Une reference vers un tableau d'ID ('serial') peut etre passee en parametre afin de filtrer les alertes a traiter.
+
+Retourne 1 si l'operation a fonctionnee sinon 0.
+
+=item - (EA) - $workOnAlarms->I<detete(\@array_ref_of_id)>
+
+Supprime la ou les alertes.
+
+Une reference vers un tableau d'ID ('serial') peut etre passee en parametre afin de filtrer les alertes a traiter.
+
+Retourne 1 si l'operation a fonctionnee sinon 0.
+
+=item - (EA) - $workOnAlarms->I<setNote($note, \@array_ref_of_id)>
+
+La note d'une ou des alertes est egale a C<$note>.
+
+Une reference vers un tableau d'ID ('serial') peut etre passee en parametre afin de filtrer les alertes a traiter.
+
+Retourne 1 si l'operation a fonctionnee sinon 0.
 
 =back
 
@@ -916,7 +1006,7 @@ Decale la valeur de la derniere erreur et la remplace par C<undef>.
 
 Retourne toujours 1.
 
-Cette methode est appelee avant l'execution des methodes C<connectToDB()>, C<disconnectFromDB()>, C<getCurrentServices()>, C<getAlarms()>, C<getExceptionAlerts()>, C<getSessionIsAlive()>, C<getProperty()>, C<setPublicProperty()>, C<getAlerts()>, C<getProblematicsJobs()> et C<getSOAPEnvelope()>.
+Cette methode est appelee avant l'execution de la plupart des accesseurs/mutateurs.
 
 =item - (*) - $obj->I<clearErrors()>
 
@@ -1002,17 +1092,17 @@ Retourne toujours 1.
 
 =back
 
-=head1 NOTES
+=head1 REMARQUES IMPORTANTES
 
 =over
 
 =item - Ce module se base en partie sur l'heure du systeme qui le charge. Si celle ci est fausse, certains resultats le seront aussi.
 
+=item - Ce module est surtout dedie a la consultation depuis Control-M EM et certains de ses composants mais certaines methodes permettant d'exploiter Control-M EM (par exemple les methodes C<handle()> ou C<delete()>). Cependant, ces actions ne seront pas forcement immediatement visibles depuis la GUI de Control-M EM.
+
 =item - Les elements prefixes de "_" sont proteges ou prives et ne doivent pas etre manipules par l'utilisateur.
 
 =item - Certaines fonctions normalements privees sont disponibles pour l'utilisateur mais ne sont pas documentees et peuvent etre fatales (pas forcement de prototypage, pas de gestion des exceptions, etc, ...).
-
-=item - Base Moose prevu pour la 0.20.
 
 =back
 

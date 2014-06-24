@@ -16,7 +16,7 @@
 #   - Time::Local
 #------------------------------------------------------------------------------------------------------
 # ATTENTION
-#   "Classe abstraite" des modules de CTM::*. Ce module n'a pas pour but d'etre charge par l'utilisateur
+#   Ce module n'a pas pour but d'etre charge par l'utilisateur
 #------------------------------------------------------------------------------------------------------
 
 #-> BEGIN
@@ -44,7 +44,7 @@ use Time::Local;
 
 #----> ** variables de classe **
 
-our $VERSION = 0.175;
+our $VERSION = 0.176;
 our $AUTOLOAD;
 
 #----> ** fonctions privees (mais accessibles a l'utilisateur pour celles qui ne sont pas des references) **
@@ -171,7 +171,7 @@ C<CTM::Base>
 
 =head1 SYNOPSIS
 
-"Classe abstraite" des modules de CTM::*.
+"Classe abstraite" des modules de C<CTM::*>.
 Pour plus de details, voir la documention POD de C<CTM::ReadEM>.
 
 =head1 DEPENDANCES
@@ -180,7 +180,7 @@ C<Carp>, C<Hash::Util>, C<Time::Local>
 
 =head1 NOTES
 
-Ce module est dedie au module C<CTM::ReadEM>.
+Ce module est dedie aux modules C<CTM::*>.
 
 =head1 AUTEUR
 
