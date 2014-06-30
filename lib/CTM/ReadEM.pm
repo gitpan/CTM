@@ -37,9 +37,9 @@ use base qw/
     CTM::Base
 /;
 
-use CTM::ReadEM::WorkOnBIMServices 0.176;
-use CTM::ReadEM::WorkOnAlarms 0.176;
-use CTM::ReadEM::WorkOnExceptionAlerts 0.176;
+use CTM::ReadEM::WorkOnBIMServices 0.177;
+use CTM::ReadEM::WorkOnAlarms 0.177;
+use CTM::ReadEM::WorkOnExceptionAlerts 0.177;
 
 use Carp qw/
     carp
@@ -58,7 +58,7 @@ use DBI;
 
 #----> ** variables de classe **
 
-our $VERSION = 0.176;
+our $VERSION = 0.177;
 our @EXPORT_OK = qw/
     $VERSION
     getStatusColorForService

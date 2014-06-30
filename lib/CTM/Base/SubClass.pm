@@ -43,7 +43,7 @@ use Hash::Util qw/
 
 #----> ** variables de classe **
 
-our $VERSION = 0.176;
+our $VERSION = 0.177;
 
 #----> ** methodes protegees **
 

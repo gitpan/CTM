@@ -44,7 +44,7 @@ use Hash::Util qw/
 
 #----> ** variables de classe **
 
-our $VERSION = 0.176;
+our $VERSION = 0.177;
 
 #----> ** methodes publiques **
 
@@ -61,7 +61,7 @@ sub unhandle {
 }
 
 sub detete {
-    return shift->SUPER::_setSerials('detete', 'workOnExceptionAlerts', 'ExceptionAlerts', 'DELETE * FROM exception_alerts', @_);
+    return shift->SUPER::_setSerials('detete', 'workOnExceptionAlerts', 'ExceptionAlerts', 'DELETE FROM exception_alerts', @_);
 }
 
 sub setNote {

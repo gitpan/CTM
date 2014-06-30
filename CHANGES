@@ -56,5 +56,7 @@ CHANGEMENTS :
     * 23/06/2014 - ajout des méthodes destinées à la gestion des alarmes/alertes dans les modules CTM::ReadEM::WorkOnAlarms et CTM::ReadEM::WorkOnExceptionAlerts.
     * 23/06/2014 - correction de quelques erreurs.
     * 23/06/2014 - mis à jour de la POD.
+- 0.177 (STABLE)
+    * 30/06/2014 - correction des requêtes SQL DELETE.
 - 0.x :
     * ? - prise en compte du champ 'DAYTIME' avec ses variations (+/-) dans la fonction privée $_calculStartEndDayTimeInPosixTimestamp->().

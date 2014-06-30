@@ -44,7 +44,7 @@ use Hash::Util qw/
 
 #----> ** variables de classe **
 
-our $VERSION = 0.176;
+our $VERSION = 0.177;
 
 #----> ** methodes publiques **
 
@@ -69,7 +69,7 @@ sub unhandle {
 }
 
 sub delete {
-    return shift->SUPER::_setSerials('delete', 'workOnAlarms', 'alarms', 'DELETE * FROM alarm', @_);
+    return shift->SUPER::_setSerials('delete', 'workOnAlarms', 'alarms', 'DELETE FROM alarm', @_);
 }
 
 sub setSeverity {
