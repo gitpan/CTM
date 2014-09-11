@@ -16,9 +16,13 @@
 #   - CTM::ReadEM::WorkOnAlarms
 #   - CTM::ReadEM::WorkOnExceptionAlerts
 #   - Carp
+#   - List::MoreUtils
 #   - Hash::Util
 #   - Exporter
+#   - Date::Calc
 #   - POSIX
+#   - Try::Tiny
+#   - Perl::OSType
 #   - DBI
 #   - DBD::?
 #------------------------------------------------------------------------------------------------------
@@ -37,28 +41,38 @@ use base qw/
     CTM::Base
 /;
 
-use CTM::ReadEM::WorkOnBIMServices 0.177;
-use CTM::ReadEM::WorkOnAlarms 0.177;
-use CTM::ReadEM::WorkOnExceptionAlerts 0.177;
+use CTM::ReadEM::WorkOnBIMServices 0.1771;
+use CTM::ReadEM::WorkOnAlarms 0.1771;
+use CTM::ReadEM::WorkOnExceptionAlerts 0.1771;
 
 use Carp qw/
     carp
     croak
+/;
+use List::MoreUtils qw/
+    uniq
 /;
 use Hash::Util qw/
     lock_hash
     lock_value
     unlock_value
 /;
+use Date::Calc 6.0, qw/
+    Date_to_Time
+/;
 use POSIX qw/
     :signal_h
     strftime
+/;
+use Try::Tiny;
+use Perl::OSType qw/
+    is_os_type
 /;
 use DBI;
 
 #----> ** variables de classe **
 
-our $VERSION = 0.177;
+our $VERSION = 0.1771;
 our @EXPORT_OK = qw/
     $VERSION
     getStatusColorForService
@@ -80,21 +94,27 @@ my %_sessionsState = (
 
 sub _calculStartEndDayTimeInPosixTimestamp($$) {
     my ($time, $ctmDailyTime) = @_;
-    if ($ctmDailyTime =~ /[\+\-]\d{4}$/) {
-        my ($ctmDailyPreviousOrNext, $ctmDailyHour, $ctmDailyMin) = (substr($ctmDailyTime, 0, 1), unpack '(a2)*', substr $ctmDailyTime, 1, 4);
-        # $ctmDailyPreviousOrNext : a utiliser pour la gestion du '+-' du champ 'DAYTIME'
+    if ($ctmDailyTime =~ /^[\+\-]\d{4}$/) {
+        my ($ctmDailyHour, $ctmDailyMin) = unpack '(a2)*', substr $ctmDailyTime, 1, 4;
         my ($minNow, $hoursNow, $dayNow, $monthNow, $yearNow) = split /\s+/, strftime('%M %H %d %m %Y', localtime $time);
         my ($previousDay, $previousDayMonth, $previousDayYear) = split /\s+/, strftime('%d %m %Y', localtime $time - 86400);
         my ($nextDay, $nextDayMonth, $nextDayYear) = split /\s+/, strftime('%d %m %Y', localtime $time + 86400);
-        my ($startDayTimeInPosixTimestamp, $endDayTimeInPosixTimestamp);
+        my %time;
         if ($hoursNow >= $ctmDailyHour && $minNow >= $ctmDailyMin) {
-            $startDayTimeInPosixTimestamp = CTM::Base::_dateToPosixTimestamp($yearNow . '/' . $monthNow . '/' . $dayNow . '-' . $ctmDailyHour . ':' . $ctmDailyMin . ':' . 00);
-            $endDayTimeInPosixTimestamp = CTM::Base::_dateToPosixTimestamp($nextDayYear . '/' . $nextDayMonth . '/' . $nextDay . '-' . $ctmDailyHour . ':' . $ctmDailyMin . ':' . 00);
+            $time{start} = Date_to_Time($yearNow, $monthNow, $dayNow, $ctmDailyHour, $ctmDailyMin, 00);
+            $time{end} = Date_to_Time($nextDayYear, $nextDayMonth, $nextDay, $ctmDailyHour, $ctmDailyMin, 00);
         } else {
-            $startDayTimeInPosixTimestamp = CTM::Base::_dateToPosixTimestamp($previousDayYear . '/' . $previousDayMonth . '/' . $previousDay . '-' . $ctmDailyHour . ':' . $ctmDailyMin . ':' . 00);
-            $endDayTimeInPosixTimestamp = CTM::Base::_dateToPosixTimestamp($yearNow . '/' . $monthNow . '/' . $dayNow . '-' . $ctmDailyHour . ':' . $ctmDailyMin . ':' . 00);
+            $time{start} = Date_to_Time($previousDayYear, $previousDayMonth, $previousDay, $ctmDailyHour, $ctmDailyMin, 00);
+            $time{end} = Date_to_Time($yearNow, $monthNow, $dayNow, $ctmDailyHour, $ctmDailyMin, 00);
         }
-        return (defined $startDayTimeInPosixTimestamp && defined $endDayTimeInPosixTimestamp) ? (1, $startDayTimeInPosixTimestamp, $endDayTimeInPosixTimestamp) : (0, 1);
+        if (grep { ! defined } values %time) {
+            return 0, 1;
+        } else {
+            if (substr($ctmDailyTime, 0, 1) eq '-') {
+                $_ += 86400 for (values %time);
+            }
+            return 1, $time{start}, $time{end};
+        }
     }
     return 0, 0;
 }
@@ -114,7 +134,7 @@ my $_doesTablesExists = sub {
 };
 
 my $_getDatasCentersInfos = sub {
-    my ($dbh, $deleteFlag, $verbose) = @_;
+    my ($dbh, $verbose) = @_;
     my $sqlRequest = <<SQL;
 SELECT d.data_center, d.netname, TO_CHAR(t.dt, 'YYYY/MM/DD HH:MI:SS') AS download_time_to_char, c.ctm_daily_time
 FROM comm c, (
@@ -132,12 +152,6 @@ SQL
         for (values %{$hashRef}) {
             ($_->{active_net_table_name} = $_->{netname}) =~ s/[^\d]//g;
             $_->{active_net_table_name} = 'a' . $_->{active_net_table_name} . '_ajob';
-            if ($deleteFlag) {
-                $sqlRequest .= "AND delete_flag = '0';";
-            } else {
-                chomp $sqlRequest;
-                $sqlRequest .= ';';
-            }
         }
         return 1, $hashRef;
     } else {
@@ -146,7 +160,7 @@ SQL
 };
 
 my $_getBIMServices = sub {
-    my ($dbh, $datacenterInfos, $matching, $forLastNetName, $serviceStatus, $forDataCenters, $verbose) = @_;
+    my ($dbh, $datacenterInfos, $matching, $deleteFlag, $forLastNetName, $serviceStatus, $forDataCenters, $verbose) = @_;
     if (%{$datacenterInfos}) {
         my $sqlRequest = <<SQL;
 SELECT *, TO_CHAR(order_time, 'YYYY/MM/DD HH:MI:SS') AS order_time_to_char
@@ -159,7 +173,7 @@ WHERE log_id IN (
 AND service_name LIKE '$matching'
 AND order_id IN (
 SQL
-        $sqlRequest .= join("\n    UNION\n", map { '    SELECT order_id FROM ' . $_->{active_net_table_name} . " WHERE appl_type = 'BIM'" } values %{$datacenterInfos}) . "\n)\n";
+        $sqlRequest .= join("\n    UNION\n", map { '    SELECT order_id FROM ' . $_->{active_net_table_name} . " WHERE appl_type = 'BIM'" . ($deleteFlag ? " AND delete_flag = '0'" : '') } values %{$datacenterInfos}) . "\n)\n";
         if ($forLastNetName) {
             $sqlRequest .= "AND active_net_name IN ('" . join("', '", map { $_->{netname} } values %{$datacenterInfos}) . "')\n";
         }
@@ -176,11 +190,12 @@ SQL
                 } elsif ($_ eq 'Completed_Late') {
                     "status_to >= '256'";
                 }
-            } @{CTM::Base::_uniqItemsArrayRef($serviceStatus)}) . ")\n";
+            } uniq(@{$serviceStatus})) . ")\n";
         }
         if (ref $forDataCenters eq 'ARRAY' && @{$forDataCenters}) {
-            $sqlRequest .= 'AND (' . join(' OR ', map { "data_center = '" . $_ . "'" } @{CTM::Base::_uniqItemsArrayRef($forDataCenters)}) . ")\nORDER BY service_name;\n";
+            $sqlRequest .= 'AND (' . join(' OR ', map { "data_center = '" . $_ . "'" } uniq(@{$forDataCenters})) . ")\n";
         }
+        $sqlRequest .= "ORDER BY service_name;\n";
         print "VERBOSE - \$_getBIMServices->() :\n\n" . $sqlRequest if ($verbose);
         my $sth = $dbh->prepare($sqlRequest);
         if ($sth->execute()) {
@@ -193,7 +208,7 @@ SQL
 };
 
 my $_getAlarms = sub {
-    my ($dbh, $matching, $severity, $limit, $timeSort, $verbose) = @_;
+    my ($dbh, $matching, $severity, $sqlLimit, $timeSort, $verbose) = @_;
     my $sqlRequest = <<SQL;
 SELECT *, TO_CHAR(upd_time, 'YYYY/MM/DD HH:MI:SS') AS upd_time_to_char
 FROM alarm
@@ -208,9 +223,9 @@ SQL
             } elsif ($_ eq 'Very_Urgent') {
                 "severity = 'V'";
             }
-        } @{CTM::Base::_uniqItemsArrayRef($severity)}) . ")\nORDER BY upd_time " . $timeSort;
+        } uniq(@{$severity})) . ")\n";
     }
-    $sqlRequest .= $limit ? "\nLIMIT " . $limit . ";\n" : ";\n";
+    $sqlRequest .= 'ORDER BY upd_time ' . $timeSort . ($sqlLimit ? "\nLIMIT " . $sqlLimit : '') . ";\n";
     print "VERBOSE - \$getAlarms->() :\n\n" . $sqlRequest if ($verbose);
     my $sth = $dbh->prepare($sqlRequest);
     if ($sth->execute()) {
@@ -222,7 +237,7 @@ SQL
 };
 
 my $_getExceptionAlerts = sub {
-    my ($dbh, $matching, $severity, $limit, $timeSort, $verbose) = @_;
+    my ($dbh, $matching, $severity, $sqlLimit, $timeSort, $verbose) = @_;
     my $sqlRequest = <<SQL;
 SELECT *, TO_CHAR(xtime, 'YYYY/MM/DD HH:MI:SS') AS xtime_to_char, TO_CHAR(xtime_of_last, 'YYYY/MM/DD HH:MI:SS') AS xtime_of_last_to_char
 FROM exception_alerts
@@ -237,9 +252,9 @@ SQL
             } elsif ($_ eq 'Severe') {
                 "xseverity = '1'";
             }
-        } @{CTM::Base::_uniqItemsArrayRef($severity)}) . ")\nORDER BY xtime " . $timeSort;
+        } uniq(@{$severity})) . ")\n";
     }
-    $sqlRequest .= $limit ? "\nLIMIT " . $limit . ";\n" : ";\n";
+    $sqlRequest .= 'ORDER BY xtime ' . $timeSort . ($sqlLimit ? "\nLIMIT " . $sqlLimit : '') . ";\n";
     print "VERBOSE - \$getExceptionAlerts->() :\n\n" . $sqlRequest if ($verbose);
     my $sth = $dbh->prepare($sqlRequest);
     if ($sth->execute()) {
@@ -308,7 +323,7 @@ sub getNbSessionsConnected {
 my $_newSessionConstructor = sub {
     my ($class, %params) = @_;
     my $self = {};
-    if (exists $params{ctmEMVersion} && exists $params{DBMSType} && exists $params{DBMSAddress} && exists $params{DBMSPort} && exists $params{DBMSInstance} && exists $params{DBMSUser}) {
+    if (defined $params{ctmEMVersion} && defined $params{DBMSType} && defined $params{DBMSAddress} && defined $params{DBMSPort} && defined $params{DBMSInstance} && defined $params{DBMSUser}) {
         $self->{_ctmEMVersion} = $params{ctmEMVersion};
         $self->{DBMSType} = $params{DBMSType};
         $self->{DBMSAddress} = $params{DBMSAddress};
@@ -330,24 +345,24 @@ my $_newSessionConstructor = sub {
 };
 
 my $_subClassConstructor = sub {
-    my ($self, $SubClass, $baseMethod, %params) = @_;
+    my ($self, $subClass, $baseMethod, %params) = @_;
     my $subSelf = {};
     $subSelf->{'_CTM::ReadEM'} = $self;
     $subSelf->{_working} = 0;
     $subSelf->{_errors} = [];
     $subSelf->{_params} = \%params;
     $subSelf->{_datas} = $self->$baseMethod(%params);
-    return bless $subSelf, $SubClass;
+    return bless $subSelf, __PACKAGE__ . '::' . $subClass;
 };
 
 my $_connectToDB = sub {
     my $self = shift;
     $self->unshiftError();
-    if (exists $self->{_ctmEMVersion} && exists $self->{DBMSType} && exists $self->{DBMSAddress} && exists $self->{DBMSPort} && exists $self->{DBMSInstance} && exists $self->{DBMSUser} && exists $self->{DBMSTimeout}) {
-        if (($self->{_ctmEMVersion} eq '6' || $self->{_ctmEMVersion} eq '7' || $self->{_ctmEMVersion} eq '8') && ($self->{DBMSType} eq 'Pg' || $self->{DBMSType} eq 'Oracle' || $self->{DBMSType} eq 'mysql' || $self->{DBMSType} eq 'Sybase' || $self->{DBMSType} eq 'ODBC') && $self->{DBMSAddress} ne '' && $self->{DBMSPort} =~ /^\d+$/ && $self->{DBMSPort} >= 0 && $self->{DBMSPort} <= 65535 && $self->{DBMSInstance} ne '' && $self->{DBMSUser} ne '' && $self->{DBMSTimeout} =~ /^\d+$/) {
+    if (defined $self->{_ctmEMVersion} && defined $self->{DBMSType} && defined $self->{DBMSAddress} && defined $self->{DBMSPort} && defined $self->{DBMSInstance} && defined $self->{DBMSUser} && defined $self->{DBMSTimeout}) {
+        if ($self->{_ctmEMVersion} =~ /^[678]$/ && $self->{DBMSType} =~ /^(Pg|Oracle|mysql|Sybase|ODBC)$/ && $self->{DBMSAddress} ne '' && $self->{DBMSPort} =~ /^\d+$/ && $self->{DBMSPort} >= 0 && $self->{DBMSPort} <= 65535 && $self->{DBMSInstance} ne '' && $self->{DBMSUser} ne '' && $self->{DBMSTimeout} =~ /^\d+$/) {
             unless ($self->getSessionIsConnected()) {
                 if (eval 'require DBD::' . $self->{DBMSType}) {
-                    my $myOSIsUnix = CTM::Base::_isUnix();
+                    my $myOSIsUnix = is_os_type('Unix', 'dragonfly');
                     my $ALRMDieSub = sub {
                         die "'DBI' : impossible de se connecter (timeout atteint) a la base '" . $self->{DBMSType} . ", instance '" .  $self->{DBMSInstance} . "' du serveur '" .  $self->{DBMSType} . "'.";
                     };
@@ -363,7 +378,7 @@ my $_connectToDB = sub {
                     } else {
                         local $SIG{ALRM} = \&$ALRMDieSub;
                     }
-                    eval {
+                    try {
                         my $connectionString = 'dbi:' . $self->{DBMSType};
                         if ($self->{DBMSType} eq 'ODBC') {
                             $connectionString .= ':driver={SQL Server};server=' . $self->{DBMSAddress} . ',' . $self->{DBMSPort} . ';database=' . $self->{DBMSInstance};
@@ -380,29 +395,30 @@ my $_connectToDB = sub {
                                 PrintError => 0,
                                 AutoCommit => 1
                             }
-                        ) || do {
+                        );
+                        if (defined $DBI::errstr) {
                             (my $errorMessage = "'DBI' : '" . $DBI::errstr . "'.") =~ s/\s+/ /g;
-                            $self->_addError($errorMessage);
-                        };
-                    };
-                    alarm 0;
-                    sigaction(SIGALRM, $oldaction) if ($myOSIsUnix);
-                    return 0 if ($self->getError());
-                    if ($@) {
-                        $self->_addError(CTM::Base::_myErrorMessage('connectToDB', $@));
-                        return 0;
-                    }
-                    my ($situation, $inexistingSQLTables) = $_doesTablesExists->($self->{_DBI}, qw/bim_log bim_prob_jobs bim_alert comm download alarm exception_alerts/);
-                    if ($situation) {
-                        unless (@{$inexistingSQLTables}) {
-                            $self->_setObjProperty('_sessionIsConnected', 1);
-                            $_sessionsState{nbSessionsConnected}++;
-                            return 1;
-                        } else {
-                            $self->_addError(CTM::Base::_myErrorMessage('connectToDB', "la connexion au SGBD est etablie mais il manque une ou plusieurs tables ('" . join("', '", @{$inexistingSQLTables}) . "') qui sont requises ."));
+                            $self->_addError(CTM::Base::_myErrorMessage('connectToDB', $errorMessage));
                         }
-                    } else {
-                        $self->_addError(CTM::Base::_myErrorMessage('connectToDB', "la connexion est etablie mais la DBI 'execute()' a echouee : '" . $inexistingSQLTables . "'."));
+                    } catch {
+                        $self->_addError(CTM::Base::_myErrorMessage('connectToDB', $_));
+                    } finally {
+                        alarm 0;
+                        sigaction(SIGALRM, $oldaction) if ($myOSIsUnix);
+                    };
+                    unless (defined $self->getError()) {
+                        my ($situation, $inexistingSQLTables) = $_doesTablesExists->($self->{_DBI}, qw/bim_log bim_prob_jobs bim_alert comm download alarm exception_alerts/);
+                        if ($situation) {
+                            unless (@{$inexistingSQLTables}) {
+                                $self->_setObjProperty('_sessionIsConnected', 1);
+                                $_sessionsState{nbSessionsConnected}++;
+                                return 1;
+                            } else {
+                                $self->_addError(CTM::Base::_myErrorMessage('connectToDB', "la connexion au SGBD est etablie mais il manque une ou plusieurs tables ('" . join("', '", @{$inexistingSQLTables}) . "') qui sont requises ."));
+                            }
+                        } else {
+                            $self->_addError(CTM::Base::_myErrorMessage('connectToDB', "la connexion est etablie mais la DBI 'execute()' a echouee : '" . $inexistingSQLTables . "'."));
+                        }
                     }
                 } else {
                     $@ =~ s/\s+/ /g;
@@ -473,13 +489,13 @@ sub getCurrentServices {
     my ($self, %params) = @_;
     $self->unshiftError();
     if ($self->getSessionIsConnected()) {
-        my ($situation, $datacenterInfos) = $_getDatasCentersInfos->($self->{_DBI}, exists $params{handleDeletedJobs} ? $params{handleDeletedJobs} : 0, $self->{verbose});
+        my ($situation, $datacenterInfos) = $_getDatasCentersInfos->($self->{_DBI}, $self->{verbose});
         if ($situation) {
             my $time = time;
             for my $datacenter (keys %{$datacenterInfos}) {
                 ($situation, my $datacenterOdateStart, my $datacenterOdateEnd) = _calculStartEndDayTimeInPosixTimestamp($time, $datacenterInfos->{$datacenter}->{ctm_daily_time});
                 if ($situation) {
-                    if (defined (my $downloadTimeInTimestamp = CTM::Base::_dateToPosixTimestamp($datacenterInfos->{$datacenter}->{download_time_to_char}))) {
+                    if (defined (my $downloadTimeInTimestamp = Date_to_Time(split /[\/:\s]+/, $datacenterInfos->{$datacenter}->{download_time_to_char}))) {
                         delete $datacenterInfos->{$datacenter} unless ($downloadTimeInTimestamp >= $datacenterOdateStart && $downloadTimeInTimestamp <= $datacenterOdateEnd);
                     } else {
                         $self->_addError(CTM::Base::_myErrorMessage('getCurrentServices', "le champ 'download_time_to_char' qui derive de la cle 'download_time' (DATETIME) via la fonction SQL TO_CHAR() (Control-M '" . $datacenterInfos->{$datacenter}->{service_name} . "') n'est pas correct ou n'est pas gere par le module. Il est possible que la base de donnees du Control-M EM soit corrompue ou que la version renseignee (version '" . $self->{_ctmEMVersion} . "') ne soit pas correcte."));
@@ -494,7 +510,7 @@ sub getCurrentServices {
                     return 0;
                 }
             }
-            ($situation, my $servicesDatas) = $_getBIMServices->($self->{_DBI}, $datacenterInfos, exists $params{matching} && defined $params{matching} ? $params{matching} : '%', exists $params{forLastNetName} ? $params{forLastNetName} : 0, exists $params{forStatus} ? $params{forStatus} : 0, exists $params{forDataCenters} ? $params{forDataCenters} : 0, $self->{verbose});
+            ($situation, my $servicesDatas) = $_getBIMServices->($self->{_DBI}, $datacenterInfos, defined $params{matching} ? $params{matching} : '%', defined $params{handleDeletedJobs} ? $params{handleDeletedJobs} : 1, defined $params{forLastNetName} ? $params{forLastNetName} : 0, defined $params{forStatus} ? $params{forStatus} : 0, defined $params{forDataCenters} ? $params{forDataCenters} : 0, $self->{verbose});
             unless ($situation) {
                 if (defined $servicesDatas) {
                     $self->_addError(CTM::Base::_myErrorMessage('getCurrentServices', "erreur lors de la recuperation des services du BIM : la methode DBI 'execute()' a echoue : '" . $servicesDatas . "'."));
@@ -515,7 +531,7 @@ sub getCurrentServices {
 
 sub workOnCurrentServices {
     croak(CTM::Base::_myErrorMessage('workOnCurrentServices', "usage : la methode n'est pas correctement declaree (une cle, une valeur).")) unless (@_ % 2);
-    my $self = shift->$_subClassConstructor('CTM::ReadEM::WorkOnBIMServices', 'getCurrentServices', @_);
+    my $self = shift->$_subClassConstructor('WorkOnBIMServices', 'getCurrentServices', @_);
     lock_hash(%{$self});
     return $self;
 }
@@ -527,7 +543,7 @@ sub getAlarms {
     my ($self, %params) = @_;
     $self->unshiftError();
     if ($self->getSessionIsConnected()) {
-        my ($situation, $alarmsData) = $_getAlarms->($self->{_DBI}, exists $params{matching} && defined $params{matching} ? $params{matching} : '%', exists $params{severity} ? $params{severity} : 0, exists $params{limit} && defined $params{limit} && $params{limit} =~ /^\d+$/ ? $params{limit} : 0, exists $params{timeSort} && defined $params{timeSort} && $params{timeSort} =~ /^ASC|DESC$/i ? $params{timeSort} : 'ASC', $self->{verbose});
+        my ($situation, $alarmsData) = $_getAlarms->($self->{_DBI}, defined $params{matching} ? $params{matching} : '%', defined $params{severity} ? $params{severity} : 0, defined $params{sqlLimit} && $params{sqlLimit} =~ /^\d+$/ ? $params{sqlLimit} : 0, defined $params{timeSort} && $params{timeSort} =~ /^ASC|DESC$/i ? $params{timeSort} : 'ASC', $self->{verbose});
         if ($situation) {
             return $alarmsData;
         } else {
@@ -541,7 +557,7 @@ sub getAlarms {
 
 sub workOnAlarms {
     croak(CTM::Base::_myErrorMessage('workOnAlarms', "usage : la methode n'est pas correctement declaree (une cle, une valeur).")) unless (@_ % 2);
-    my $self = shift->$_subClassConstructor('CTM::ReadEM::WorkOnAlarms', 'getAlarms', @_);
+    my $self = shift->$_subClassConstructor('WorkOnAlarms', 'getAlarms', @_);
     lock_hash(%{$self});
     return $self;
 }
@@ -553,7 +569,7 @@ sub getExceptionAlerts {
     my ($self, %params) = @_;
     $self->unshiftError();
     if ($self->getSessionIsConnected()) {
-        my ($situation, $exceptionAlertsDatas) = $_getExceptionAlerts->($self->{_DBI}, exists $params{matching} && defined $params{matching} ? $params{matching} : '%', exists $params{severity} ? $params{severity} : 0, exists $params{limit} && defined $params{limit} && $params{limit} =~ /^\d+$/ ? $params{limit} : 0, exists $params{timeSort} && defined $params{timeSort} && $params{timeSort} =~ /^ASC|DESC$/i ? $params{timeSort} : 'ASC', $self->{verbose});
+        my ($situation, $exceptionAlertsDatas) = $_getExceptionAlerts->($self->{_DBI}, defined $params{matching} ? $params{matching} : '%', defined $params{severity} ? $params{severity} : 0, defined $params{sqlLimit} && $params{sqlLimit} =~ /^\d+$/ ? $params{sqlLimit} : 0, defined $params{timeSort} && $params{timeSort} =~ /^ASC|DESC$/i ? $params{timeSort} : 'ASC', $self->{verbose});
         if ($situation) {
             return $exceptionAlertsDatas;
         } else {
@@ -567,7 +583,7 @@ sub getExceptionAlerts {
 
 sub workOnExceptionAlerts {
     croak(CTM::Base::_myErrorMessage('workOnExceptionAlerts', "usage : la methode n'est pas correctement declaree (une cle, une valeur).")) unless (@_ % 2);
-    my $self = shift->$_subClassConstructor('CTM::ReadEM::WorkOnExceptionAlerts', 'getExceptionAlerts', @_);
+    my $self = shift->$_subClassConstructor('WorkOnExceptionAlerts', 'getExceptionAlerts', @_);
     lock_hash(%{$self});
     return $self;
 }
@@ -611,16 +627,41 @@ __END__
 
 =head1 NOM
 
-CTM::ReadEM
+C<CTM::ReadEM>
 
 =head1 SYNOPSIS
 
 Consultation de Control-M EM 6/7/8 via son SGBD.
-Voir la section EXEMPLES.
+
+Point d'entree des modules C<CTM>.
+
+    use CTM::ReadEM qw/:all/;
+
+    my $session = CTM::ReadEM->newSession(
+        ctmEMVersion => 7,
+        DBMSType => "Pg",
+        DBMSAddress => "127.0.0.1",
+        DBMSPort => 3306,
+        DBMSInstance => "ctmem",
+        DBMSUser => "root",
+        DBMSPassword => "root"
+    );
+
+    $session->connectToDB() || die $session->getError();
+
+    my $servicesHashRef = $session->getCurrentServices();
+
+    unless (defined ($err = $session->getError())) {
+        print $_->{service_name} . " : " . getStatusColorForService($_) . "\n" for (values %{$servicesHashRef});
+    } else {
+        die $err;
+    }
+
+Voir la section EXEMPLES pour plus de details.
 
 =head1 DEPENDANCES
 
-C<CTM::Base>, C<CTM::ReadEM::WorkOnBIMServices>, C<CTM::ReadEM::WorkOnAlarms>, C<CTM::ReadEM::WorkOnExceptionAlerts>, C<Carp>, C<Hash::Util>, C<Exporter>, C<Time::Local>, C<POSIX>, C<DBI>, C<DBD::?>
+C<CTM::Base>, C<CTM::ReadEM::WorkOnBIMServices>, C<CTM::ReadEM::WorkOnAlarms>, C<CTM::ReadEM::WorkOnExceptionAlerts>, C<Carp>, C<List::MoreUtils>, C<Hash::Util>, C<Exporter>, C<Date::Calc>, C<POSIX>, C<Try::Tiny>, C<Perl::OSType>, C<DBI>, C<DBD::?>
 
 =head1 PROPRIETES PUBLIQUES (C<CTM::ReadEM>)
 
@@ -658,7 +699,7 @@ Timeout (en seconde) de la tentavive de connexion au SGBD du Control-M EM.
 
 La valeur 0 signifie qu aucun timeout ne sera applique.
 
-Attention, cette propriete risque de ne pas fonctionner sous Windows (ou d'autres systemes ne gerant pas les signaux UNIX).
+ATTENTION, cette propriete risque de ne pas fonctionner sous Windows (ou d'autres systemes ne gerant pas les signaux UNIX).
 
 =item - $session->I<{verbose}>
 
@@ -708,7 +749,7 @@ Retourne le nombre d instances en cours et connectees a la base du Control-M EM 
 
 Cette methode est le constructeur du module C<CTM::ReadEM>. C<CTM::ReadEM-E<gt>new()> est un equivalent.
 
-Les parametres disponibles sont "ctmEMVersion", "DBMSType", "DBMSAddress", "DBMSPort", "DBMSInstance", "DBMSUser", "DBMSPassword", "DBMSTimeout" et "verbose" (booleen)
+Les parametres disponibles sont "ctmEMVersion" (obligatoire et de valeur 6, 7 ou 8), "DBMSType" (obligatoire), "DBMSAddress" (obligatoire), "DBMSPort" (obligatoire), "DBMSInstance" (obligatoire), "DBMSUser" (obligatoire), "DBMSPassword", "DBMSTimeout" et "verbose" (booleen)
 
 Pour information, le destructeur C<DESTROY()> est appele lorsque toutes les references a l'objet instancie ont ete detruites (C<undef $session;> par exemple).
 
@@ -734,7 +775,7 @@ Un filtre est disponible avec le parametre "matching" (SQL C<LIKE> clause).
 
 Le parametre "forLastNetName" accepte un booleen. Si il est vrai alors cette methode ne retournera que les services avec la derniere ODATE. Faux par defaut.
 
-Le parametre "handleDeletedJobs" accepte un booleen. Si il est vrai alors cette methode ne retournera que les services qui n'ont pas ete supprimes du plan. Vrai par defaut.
+Le parametre "handleDeletedJobs" accepte un booleen. Si il est vrai alors cette methode ne retournera que les services (jobs de type "BIM") qui n'ont pas ete supprimes du plan. Vrai par defaut.
 
 Le parametre "forStatus" doit etre une reference d'un tableau. Si c'est le cas, la methode ne retournera que les services avec les status renseignes (status valides (sensibles a la case) : "OK", "Completed_OK", "Completed_Late", "Warning", "Error") dans ce tableau.
 
@@ -800,7 +841,7 @@ Le parametre "severity" doit etre une reference d'un tableau. Si c'est le cas, l
 
 Le parametre "timeSort" : SQL C<ORDER BY> . Il trie les donnees renvoyees de maniere ascendante (SQL C<ASC> (insensible a la case)) ou descendante (SQL C<DESC> (insensible a la case)) sur la date de l'alerte.
 
-Le parametre "limit" : SQL C<LIMIT>. Il prend un entier comme valeur (pas d'interval "n,n").
+Le parametre "sqlLimit" : SQL C<LIMIT>. Il prend un entier comme valeur (pas d'interval "n,n"). ATTENTION, certains SGBD ne supportent pas cette clause.
 
 La cle de cette table de hachage est "serial".
 
@@ -898,7 +939,7 @@ Le parametre "severity" doit etre une reference d'un tableau. Si c'est le cas, l
 
 Le parametre "timeSort" : SQL C<ORDER BY> . Il trie les donnees renvoyees de maniere ascendante (SQL C<ASC> (insensible a la case)) ou descendante (SQL C<DESC> (insensible a la case)) sur la date de l'alerte.
 
-Le parametre "limit" : SQL C<LIMIT>. Il prend un entier comme valeur (pas d'interval "n,n").
+Le parametre "sqlLimit" : SQL C<LIMIT>. Il prend un entier comme valeur (pas d'interval "n,n"). ATTENTION, certains SGBD ne supportent pas cette clause.
 
 La cle de cette table de hachage est "serial".
 
@@ -966,7 +1007,7 @@ Retourne 1 si l'operation a fonctionnee sinon 0.
 
 Verifie et retourne l'etat (booleen) de la connexion a la base du Control-M EM.
 
-Attention, n'est pas fiable pour tous les types de SGBD (pour plus de details, voir L<http://search.cpan.org/dist/DBI/DBI.pm#ping>).
+ATTENTION, n'est pas fiable pour tous les types de SGBD (pour plus de details, voir L<http://search.cpan.org/dist/DBI/DBI.pm#ping>).
 
 =item - (*) - $session->I<getSessionIsConnected()>
 
@@ -999,6 +1040,10 @@ Retourne l'erreur a l'element C<$item> (0 par defaut, donc la derniere erreur ge
 Retourne C<undef> si il n'y a pas d'erreur ou si la derniere a ete decalee via la methode C<$obj-E<gt>unshiftError()>.
 
 Une partie des erreurs sont gerees via le module Carp et ses deux fonctions C<croak> et C<carp> (notamment le fait de ne pas correctement utiliser les methodes/fonctions)).
+
+=item - (*) - $obj->I<countErrors>
+
+Retourne le nombre d'erreurs generees (et non-decalee via la methode C<$obj-E<gt>unshiftError()>) pour l'objet C<$obj>.
 
 =item - (*) - $obj->I<unshiftError()>
 
@@ -1048,7 +1093,7 @@ Retourne toujours 1.
     my $servicesHashRef = $session->getCurrentServices();
 
     unless (defined ($err = $session->getError())) {
-        print $_->{service_name} . " : " . getStatusColorForService($_) . "\n" for (values %{$servicesHashRef})
+        print $_->{service_name} . " : " . getStatusColorForService($_) . "\n" for (values %{$servicesHashRef});
     } else {
         die $err;
     }
@@ -1104,11 +1149,13 @@ Retourne toujours 1.
 
 =item - Certaines fonctions normalements privees sont disponibles pour l'utilisateur mais ne sont pas documentees et peuvent etre fatales (pas forcement de prototypage, pas de gestion des exceptions, etc, ...).
 
+=item - "oldschool" pour le moment, les versions 0.2x et + de ces modules se baseront sur Moose.
+
 =back
 
 =head1 AUTEUR
 
-Le Garff Yoann <weeble@cpan.org>
+Le Garff Yoann <pe.weeble@yahoo.fr>
 
 =head1 LICENCE
 

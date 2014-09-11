@@ -44,7 +44,7 @@ use Hash::Util qw/
 
 #----> ** variables de classe **
 
-our $VERSION = 0.177;
+our $VERSION = 0.1771;
 
 #----> ** methodes publiques **
 
@@ -74,7 +74,7 @@ sub delete {
 
 sub setSeverity {
     my ($self, $severity, $serialID) = @_;
-    croak(CTM::Base::_myErrorMessage('setSeverity', "usage : \$obj->setPublicProperty(\$R_or_U_or_V).")) unless ($severity eq 'R' || $severity eq 'U' || $severity eq 'V');
+    croak(CTM::Base::_myErrorMessage('setSeverity', "usage : \$obj->setPublicProperty(^(R|U|V)\$).")) unless ($severity eq 'R' || $severity eq 'U' || $severity eq 'V');
     return shift->SUPER::_setSerials('setSeverity', 'workOnAlarms', 'alarms', "UPDATE alarm SET severity = '" . $severity . "'", $serialID);
 }
 
@@ -121,7 +121,7 @@ Ce module est dedie au module C<CTM::ReadEM>.
 
 =head1 AUTEUR
 
-Le Garff Yoann <weeble@cpan.org>
+Le Garff Yoann <pe.weeble@yahoo.fr>
 
 =head1 LICENCE
 

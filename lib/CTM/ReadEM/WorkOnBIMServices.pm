@@ -44,7 +44,7 @@ use Hash::Util qw/
 
 #----> ** variables de classe **
 
-our $VERSION = 0.177;
+our $VERSION = 0.1771;
 
 #----> ** fonctions privees (mais accessibles a l'utilisateur pour celles qui ne sont pas des references) **
 
@@ -192,7 +192,7 @@ Ce module est dedie au module C<CTM::ReadEM>.
 
 =head1 AUTEUR
 
-Le Garff Yoann <weeble@cpan.org>
+Le Garff Yoann <pe.weeble@yahoo.fr>
 
 =head1 LICENCE
 

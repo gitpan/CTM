@@ -1,4 +1,5 @@
 CHANGES
+ex/get_bim_services.pl
 lib/CTM/Base.pm
 lib/CTM/Base/SubClass.pm
 lib/CTM/ReadEM.pm
@@ -11,4 +12,5 @@ MANIFEST			This list of files
 MANIFEST.SKIP
 META.json
 META.yml
-README
+README.md
+t/01init.t

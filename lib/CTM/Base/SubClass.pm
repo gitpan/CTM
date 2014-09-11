@@ -1,5 +1,5 @@
 #------------------------------------------------------------------------------------------------------
-# OBJET : "Classe abstraite" des modules de CTM::ReadEM::*
+# OBJET : "Classe abstraite" des sous-modules ou sous-classes de CTM::ReadEM
 #------------------------------------------------------------------------------------------------------
 # APPLICATION : Control-M
 #------------------------------------------------------------------------------------------------------
@@ -43,7 +43,7 @@ use Hash::Util qw/
 
 #----> ** variables de classe **
 
-our $VERSION = 0.177;
+our $VERSION = 0.1771;
 
 #----> ** methodes protegees **
 
@@ -132,7 +132,7 @@ C<CTM::Base::SubClass>
 
 =head1 SYNOPSIS
 
-"Classe abstraite" des modules C<CTM::ReadEM::*>.
+"Classe abstraite" des sous-modules ou sous-classes C<CTM::ReadEM>.
 Pour plus de details, voir la documention POD de C<CTM::ReadEM>.
 
 =head1 DEPENDANCES
@@ -141,11 +141,11 @@ C<CTM::Base>, C<Carp>, C<Hash::Util>
 
 =head1 NOTES
 
-Ce module est dedie aux modules de C<CTM::ReadEM::*>.
+Ce module est dedie aux sous-modules ou sous-classes C<CTM::ReadEM>.
 
 =head1 AUTEUR
 
-Le Garff Yoann <weeble@cpan.org>
+Le Garff Yoann <pe.weeble@yahoo.fr>
 
 =head1 LICENCE
 

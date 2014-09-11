@@ -1,5 +1,5 @@
 #------------------------------------------------------------------------------------------------------
-# OBJET : "Classe abstraite" des modules de CTM::*
+# OBJET : "Classe abstraite" des modules de CTM
 #------------------------------------------------------------------------------------------------------
 # APPLICATION : Control-M
 #------------------------------------------------------------------------------------------------------
@@ -13,7 +13,6 @@
 # DEPENDANCES OBLIGATOIRES
 #   - Carp
 #   - Hash::Util
-#   - Time::Local
 #------------------------------------------------------------------------------------------------------
 # ATTENTION
 #   Ce module n'a pas pour but d'etre charge par l'utilisateur
@@ -25,7 +24,7 @@
 
 package CTM::Base;
 
-require 5.6.1;
+use 5.6.1;
 
 use strict;
 use warnings;
@@ -40,30 +39,13 @@ use Hash::Util qw/
     lock_value
     unlock_value
 /;
-use Time::Local;
 
 #----> ** variables de classe **
 
-our $VERSION = 0.177;
+our $VERSION = 0.1771;
 our $AUTOLOAD;
 
 #----> ** fonctions privees (mais accessibles a l'utilisateur pour celles qui ne sont pas des references) **
-
-sub _uniqItemsArrayRef($) {
-  return [keys %{{map { $_ => undef } @{+shift}}}];
-}
-
-sub _isUnix() {
-    return grep /^${^O}$/i, qw/aix bsdos dgux dynixptx freebsd linux hpux irix openbsd dec_osf svr4 sco_sv svr4 unicos unicosmk solaris sunos netbsd sco3 ultrix macos rhapsody/;
-}
-
-sub _dateToPosixTimestamp($) {
-    my ($year, $mon, $day, $hour, $min, $sec) = split /[\/\-\s:]+/, shift;
-    my $time = eval {
-        timelocal($sec, $min, $hour, $day, $mon - 1, $year);
-    };
-    return $time =~ /^\d+$/ ? $time : undef;
-}
 
 sub _myErrorMessage($$) {
     my ($subroutine, $message) = @_;
@@ -118,7 +100,7 @@ sub setPublicProperty {
     $self->unshiftError();
     unless (exists $self->{$property}) {
         carp(_myErrorMessage('setPublicProperty', "tentative de creation d'une propriete ('" . $property . "')."));
-    } elsif ((substr $property, 0, 1) eq '_') {
+    } elsif (substr($property, 0, 1) eq '_') {
         carp(_myErrorMessage('setPublicProperty', "tentative de modication d'une propriete ('" . $property . "') protegee ou privee."));
     } else {
         return $self->_setObjProperty($property, $value);
@@ -128,8 +110,12 @@ sub setPublicProperty {
 
 sub getError {
     my ($self, $arrayItem) = @_;
-    my $error = $self->{_errors}->[(defined $arrayItem && $arrayItem =~ /^[\+\-]?\d+$/) ? $arrayItem : 0];
-    return $error;
+    return $self->{_errors}->[(defined $arrayItem && $arrayItem =~ /^[\+\-]?\d+$/) ? $arrayItem : 0];
+}
+
+sub countErrors {
+    my $self = shift;
+    return scalar @{$self->{_errors}};
 }
 
 sub unshiftError {
@@ -171,20 +157,20 @@ C<CTM::Base>
 
 =head1 SYNOPSIS
 
-"Classe abstraite" des modules de C<CTM::*>.
+"Classe abstraite" des modules de C<CTM>.
 Pour plus de details, voir la documention POD de C<CTM::ReadEM>.
 
 =head1 DEPENDANCES
 
-C<Carp>, C<Hash::Util>, C<Time::Local>
+C<Carp>, C<Hash::Util>
 
 =head1 NOTES
 
-Ce module est dedie aux modules C<CTM::*>.
+Ce module est dedie aux modules C<CTM>.
 
 =head1 AUTEUR
 
-Le Garff Yoann <weeble@cpan.org>
+Le Garff Yoann <pe.weeble@yahoo.fr>
 
 =head1 LICENCE
 
