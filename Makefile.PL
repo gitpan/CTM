@@ -1,20 +1,11 @@
 #------------------------------------------------------------------------------------------------------
 # OBJET : Installation de CTM::* et de ses dependances
-#------------------------------------------------------------------------------------------------------
 # APPLICATION : ControlM
-#------------------------------------------------------------------------------------------------------
 # AUTEUR : Yoann Le Garff
 # DATE DE CREATION : 16/05/2014
-# ETAT : STABLE
 #------------------------------------------------------------------------------------------------------
 # AIDE :
 #   perldoc Makefile.PL
-#------------------------------------------------------------------------------------------------------
-# USAGE
-#   perl Makefile.PL
-#------------------------------------------------------------------------------------------------------
-# DEPENDANCES OBLIGATOIRES
-#   - ExtUtils::MakeMaker
 #------------------------------------------------------------------------------------------------------
 
 #-> BEGIN
@@ -36,7 +27,7 @@ WriteMakefile(
             repository => {
                 type => 'git',
                 url => 'git://github.com/Le-Garff-Yoann/CTM',
-                web => 'https://github.com/Le-Garff-Yoann/CTM'
+                web => 'http://github.com/Le-Garff-Yoann/CTM'
             }
         }
     },
@@ -47,15 +38,18 @@ WriteMakefile(
        'ExtUtils::MakeMaker' => 6.64
     },
     PREREQ_PM => {
+        'Sub::Name' => 0,
         'Carp' => 0,
         'Hash::Util' => 0,
-        'Exporter' => 0,
+        'Exporter::Easy' => 0,
         'Date::Calc' => 6.0,
         'POSIX'  => 0,
         'Try::Tiny' => 0,
         'Perl::OSType' => 0,
+        'String::Util' => 0,
         'List::MoreUtils' => 0,
-        'DBI'  => 0
+        'Storable' => 0,
+        'DBI'  => 0,
     },
     TEST_REQUIRES => {
         'Test::More' => 0
@@ -85,6 +79,10 @@ Makefile.PL pour les modules C<CTM::*>.
 =head1 DEPENDANCES
 
 C<ExtUtils::MakeMaker>
+
+=head1 LIENS
+
+- Depot GitHub : http://github.com/le-garff-yoann/CTM
 
 =head1 AUTEUR
 

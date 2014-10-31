@@ -4,7 +4,7 @@
       "Le Garff Yoann <pe.weeble@yahoo.fr>"
    ],
    "dynamic_config" : 0,
-   "generated_by" : "ExtUtils::MakeMaker version 6.98, CPAN::Meta::Converter version 2.141520",
+   "generated_by" : "ExtUtils::MakeMaker version 6.94, CPAN::Meta::Converter version 2.140640, CPAN::Meta::Converter version 2.142690",
    "license" : [
       "perl_5"
    ],
@@ -22,8 +22,7 @@
    "prereqs" : {
       "build" : {
          "requires" : {
-            "ExtUtils::MakeMaker" : "0",
-            "Test::More" : "0"
+            "ExtUtils::MakeMaker" : "0"
          }
       },
       "configure" : {
@@ -36,17 +35,25 @@
             "Carp" : "0",
             "DBI" : "0",
             "Date::Calc" : "6",
-            "Exporter" : "0",
+            "Exporter::Easy" : "0",
             "Hash::Util" : "0",
             "List::MoreUtils" : "0",
             "POSIX" : "0",
             "Perl::OSType" : "0",
+            "Storable" : "0",
+            "String::Util" : "0",
+            "Sub::Name" : "0",
             "Try::Tiny" : "0",
             "perl" : "5.006001"
+         }
+      },
+      "test" : {
+         "requires" : {
+            "Test::More" : "0"
          }
       }
    },
    "release_status" : "stable",
    "resources" : {},
-   "version" : "0.1771"
+   "version" : "0.18"
 }

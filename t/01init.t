@@ -1,19 +1,12 @@
 #!/usr/bin/perl
 #------------------------------------------------------------------------------------------------------
 # OBJET : Test pour CTM::ReadEM. Instanciation de la classe CTM::ReadEM
-#------------------------------------------------------------------------------------------------------
 # APPLICATION : Control-M
-#------------------------------------------------------------------------------------------------------
 # AUTEUR : Yoann Le Garff
 # DATE DE CREATION : 20/07/2014
-# ETAT : STABLE
 #------------------------------------------------------------------------------------------------------
 # AIDE :
 #   perldoc 01init.t
-#------------------------------------------------------------------------------------------------------
-# DEPENDANCES OBLIGATOIRES
-#   - Test::More
-#   - CTM::ReadEM
 #------------------------------------------------------------------------------------------------------
 
 #-> BEGIN
@@ -67,6 +60,10 @@ Test pour C<CTM::ReadEM>. Instanciation de la classe C<CTM::ReadEM>.
 =head1 DEPENDANCES
 
 C<Test::More>, C<CTM::ReadEM>
+
+=head1 LIENS
+
+- Depot GitHub : http://github.com/le-garff-yoann/CTM
 
 =head1 AUTEUR
 

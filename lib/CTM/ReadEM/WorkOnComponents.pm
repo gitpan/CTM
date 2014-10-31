@@ -1,18 +1,18 @@
 #------------------------------------------------------------------------------------------------------
-# OBJET : Module du constructeur CTM::ReadEM::workOnExceptionAlerts()
-# APPLICATION : Control-M EM + Configuration Manager Alarms (CM)
+# OBJET : Module du constructeur CTM::ReadEM::workOnComponents()
+# APPLICATION : Control-M EM + Components (CM)
 # AUTEUR : Yoann Le Garff
-# DATE DE CREATION : 27/05/2014
+# DATE DE CREATION : 10/09/2014
 #------------------------------------------------------------------------------------------------------
 # USAGE / AIDE
-#   perldoc CTM::ReadEM::WorkOnExceptionAlerts
+#   perldoc CTM::ReadEM::WorkOnComponents
 #------------------------------------------------------------------------------------------------------
 
 #-> BEGIN
 
 #----> ** initialisation **
 
-package CTM::ReadEM::WorkOnExceptionAlerts;
+package CTM::ReadEM::WorkOnComponents;
 
 use strict;
 use warnings;
@@ -23,6 +23,7 @@ use base qw/
 /;
 
 use Carp qw/
+    carp
     croak
 /;
 use Hash::Util qw/
@@ -34,29 +35,6 @@ use Hash::Util qw/
 our $VERSION = 0.18;
 
 #----> ** methodes publiques **
-
-sub resetAndRefresh {
-    return shift->SUPER::_resetAndRefresh(CTM::Base::_CLASS_INFOS->{GASExceptionAlerts}->{workMethod});
-}
-
-sub handle {
-    return shift->SUPER::_setSerials((caller 0)[3], "UPDATE exception_alerts SET status = '2'", @_);
-}
-
-sub unhandle {
-    return shift->SUPER::_setSerials((caller 0)[3], "UPDATE exception_alerts SET status = '1'", @_);
-}
-
-sub detete {
-    return shift->SUPER::_setSerials((caller 0)[3], 'DELETE FROM exception_alerts', @_);
-}
-
-sub setNote {
-    my ($self, $note, $serialID) = @_;
-    my $subName = (caller 0)[3];
-    croak(CTM::Base::_myErrorMessage($subName, CTM::Base::_myUsageMessage('$obj->' . $subName, '$definedNote'))) unless (defined $note);
-    return shift->SUPER::_setSerials($subName, "UPDATE exception_alerts SET note = '" . $note . "'", $serialID);
-}
 
 #-> Perl BuiltIn
 
@@ -78,11 +56,11 @@ __END__
 
 =head1 NOM
 
-CTM::ReadEM::WorkOnExceptionAlerts
+CTM::ReadEM::WorkOnComponents
 
 =head1 SYNOPSIS
 
-Module du constructeur C<CTM::ReadEM::workOnExceptionAlerts()>.
+Module du constructeur C<CTM::ReadEM::workOnComponents()>.
 Pour plus de details, voir la documention POD de C<CTM::ReadEM>.
 
 =head1 DEPENDANCES DIRECTES

@@ -4,7 +4,8 @@ lib/CTM/Base.pm
 lib/CTM/Base/SubClass.pm
 lib/CTM/ReadEM.pm
 lib/CTM/ReadEM/WorkOnAlarms.pm
-lib/CTM/ReadEM/WorkOnBIMServices.pm
+lib/CTM/ReadEM/WorkOnCurrentBIMServices.pm
+lib/CTM/ReadEM/WorkOnComponents.pm
 lib/CTM/ReadEM/WorkOnExceptionAlerts.pm
 Makefile
 Makefile.PL
@@ -12,5 +13,7 @@ MANIFEST			This list of files
 MANIFEST.SKIP
 META.json
 META.yml
+MYMETA.json
+MYMETA.yml
 README.md
 t/01init.t

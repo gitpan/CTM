@@ -1,22 +1,11 @@
 #------------------------------------------------------------------------------------------------------
 # OBJET : "Classe abstraite" des sous-modules ou sous-classes de CTM::ReadEM
-#------------------------------------------------------------------------------------------------------
 # APPLICATION : Control-M
-#------------------------------------------------------------------------------------------------------
 # AUTEUR : Yoann Le Garff
 # DATE DE CREATION : 09/05/2014
-# ETAT : STABLE
 #------------------------------------------------------------------------------------------------------
 # USAGE / AIDE
 #   perldoc CTM::Base::SubClass
-#------------------------------------------------------------------------------------------------------
-# DEPENDANCES OBLIGATOIRES
-#   - CTM::Base
-#   - Carp
-#   - Hash::Util
-#------------------------------------------------------------------------------------------------------
-# ATTENTION
-#   Ce module n'a pas pour but d'etre charge par l'utilisateur
 #------------------------------------------------------------------------------------------------------
 
 #-> BEGIN
@@ -34,82 +23,154 @@ use base qw/
 
 use Carp qw/
     carp
-    croak
+/;
+use String::Util qw/
+    crunch
 /;
 use Hash::Util qw/
     lock_hash
     unlock_hash
 /;
+use Storable qw/
+    dclone
+/;
 
 #----> ** variables de classe **
 
-our $VERSION = 0.1771;
+our $VERSION = 0.18;
+
+#----> ** methodes privees **
+
+my $_clone = sub {
+    my $self = shift;
+    my $clone = {
+        CTM::Base::_CLASS_INFOS->{common}->{rootClass}->{propertyName} => $self->getParentClass(),
+        CTM::Base::_CLASS_INFOS->{common}->{objectProperties}->{subClassDatas}->{name} => dclone($self->getItems()),
+        CTM::Base::_CLASS_INFOS->{common}->{objectProperties}->{parameters}->{name} => dclone($self->getParams()),
+        CTM::Base::_CLASS_INFOS->{common}->{objectProperties}->{errors}->{name} => dclone($self->getErrors()),
+        CTM::Base::_CLASS_INFOS->{common}->{objectProperties}->{working}->{name} => 0
+    };
+    return bless $clone, ref $self;
+};
 
 #----> ** methodes protegees **
 
-sub _refresh {
-    my ($self, $baseMethod) = @_;
+sub _resetAndRefresh {
+    my ($self, $workMethod) = @_;
     if (caller->isa(__PACKAGE__)) {
-        sleep 1 while ($self->{_working});
-        my $selfTemp = $self->{'_CTM::ReadEM'}->$baseMethod(
-            %{$self->{_params}}
+        sleep 1 while ($self->_isWorking());
+        my $selfTemp = $self->getParentClass()->$workMethod(
+            %{$self->getParams()}
         );
-        my $_errorsTemp = $self->{_errors};
+        my $_errorsTemp = $self->getErrors();
         $self = $selfTemp;
         unlock_hash(%{$self});
-        $self->{_errors} = $_errorsTemp;
+        $self->{CTM::Base::_CLASS_INFOS->{common}->{objectProperties}->{errors}->{name}} = $_errorsTemp;
         lock_hash(%{$self});
         return 1;
+    } else {
+        carp(CTM::Base::_myErrorMessage((caller 0)[3], "tentative d'utilisation d'une methode protegee."));
     }
-    carp(CTM::Base::_myErrorMessage('_refresh', "tentative d'utilisation d'une methode protegee."));
     return 0;
 }
 
 #-> methodes en rapport avec les alarmes/alertes
 
 sub _setSerials {
-    my ($self, $baseMethod, $baseConstructor, $errorType, $sqlRequest, $serialID) = @_;
+    my ($self, $childSub, $sqlRequest, $serialID) = @_;
+    my $subName = (caller 0)[3];
     if (caller->isa(__PACKAGE__)) {
-        $self->_setObjProperty('_working', 1);
+        $self->_tagAtWork;
         $self->unshiftError();
-        if ($self->{'_CTM::ReadEM'}->getSessionIsConnected()) {
-            if ($self->{_datas}) {
-                $serialID = [keys %{$self->{_datas}}] unless (defined $serialID && ref $serialID eq 'ARRAY');
-                $sqlRequest .= " WHERE serial IN ('" . join("', '", @{$serialID}) . "');";
-                print "VERBOSE - _setSerials() :\n\n" . $sqlRequest . "\n" if ($self->{'_CTM::ReadEM'}->{verbose}); 
-                if ($self->{'_CTM::ReadEM'}->{_DBI}->do($sqlRequest)) {
-                    $self->_setObjProperty('_working', 0);
+        if ($self->getParentClass()->isSessionSeemAlive()) {
+            my @serialID = ($serialID eq 'ARRAY' && @{$serialID}) ? @{$serialID} : keys %{$self->getItems()};
+            if (@serialID) {
+                my $sth = $self->getParentClass()->_DBI()->prepare($sqlRequest . ' WHERE serial IN (' . join(', ', ('?') x @serialID) . ')');
+                $self->getParentClass()->_invokeVerbose($subName, "\n". $sth->{Statement} . "\n");
+                if ($sth->execute(@serialID)) {
+                    $self->_tagAtRest;
                     return 1;
                 } else {
-                    $self->_addError(CTM::Base::_myErrorMessage($baseMethod, "la connexion est etablie mais la methode DBI 'do()' a echouee : '" . $self->{'_CTM::ReadEM'}->{_DBI}->errstr() . "'."));
+                    $self->_addError(CTM::Base::_myErrorMessage($childSub, "la connexion est etablie mais la methode DBI 'do()' a echouee : '" . crunch($self->getParentClass()->_DBI()->errstr()) . "'."));
                 }
-            } else {
-                $self->_addError(CTM::Base::_myErrorMessage($baseMethod, "impossible de prendre en compte les '" . $errorType . "' car ces elements n'ont pas etre generer via la methode '" . $baseConstructor . "()'."));
             }
         } else {
-            $self->_addError(CTM::Base::_myErrorMessage($baseMethod, "impossible de continuer car la connexion au SGBD n'est pas active."));
+            $self->_addError(CTM::Base::_myErrorMessage($childSub, "impossible de continuer car la connexion au SGBD n'est pas active."));
         }
-        $self->_setObjProperty('_working', 0);
+        $self->_tagAtRest;
     } else {
-        carp(CTM::Base::_myErrorMessage('_setSerials', "tentative d'utilisation d'une methode protegee."));
+        carp(CTM::Base::_myErrorMessage($subName, "tentative d'utilisation d'une methode protegee."));
     }
     return 0;
 }
 
 #----> ** methodes publiques **
 
+sub clone {
+    my $selfClone = shift->$_clone();
+    lock_hash(%{$selfClone});
+    return $selfClone;
+}
+
 sub countItems {
     my $self = shift;
-    if (ref $self->{_datas} eq 'HASH') {
-        return scalar keys %{$self->{_datas}};
-    }
-    return 0;
+    return scalar keys %{$self->getItems()};
 }
 
 #-> accesseurs/mutateurs
 
+sub getParentClass {
+    my $self = shift;
+    return $self->{CTM::Base::_CLASS_INFOS->{common}->{rootClass}->{propertyName}};
+}
+
+sub getParams {
+    my $self = shift;
+    return $self->{CTM::Base::_CLASS_INFOS->{common}->{objectProperties}->{parameters}->{name}};
+}
+
 sub getItems {
-    return shift->{_datas};
+    my $self = shift;
+    return ref $self->{CTM::Base::_CLASS_INFOS->{common}->{objectProperties}->{subClassDatas}->{name}} eq 'HASH' ? $self->{CTM::Base::_CLASS_INFOS->{common}->{objectProperties}->{subClassDatas}->{name}} : {};
+}
+
+sub keepItemsWithAnd {
+    my ($self, $properties) = @_;
+    my $subName = (caller 0)[3];
+    if (ref $properties eq 'HASH') {
+        while (my ($itemId, $item) = each %{$self->getItems()}) {
+            while (my ($property, $expr) = each %{$properties}) {
+                if (defined $item->{$property} && ref $expr eq 'ARRAY' && @{$expr}) {
+                    delete $self->getItems()->{$itemId} unless (eval join ' ', map { /^\$_$/ ? $item->{$property} : $_ } @{$expr});
+                }
+            }
+        }
+    } else {
+        croak(CTM::Base::_myErrorMessage($subName, CTM::Base::_myUsageMessage('$obj->' . $subName, "{ 'property' => 'expr' }")));
+    }
+    return $self;
+}
+
+sub keepItemsWithOr {
+    my ($self, $properties) = @_;
+    my $subName = (caller 0)[3];
+    if (ref $properties eq 'HASH') {
+        my %test;
+        while (my ($itemId, $item) = each %{$self->getItems()}) {
+            $test{$itemId} = {};
+            while (my ($property, $expr) = each %{$properties}) {
+                if (defined $item->{$property} && ref $expr eq 'ARRAY' && @{$expr}) {
+                    $test{$itemId}->{$property} = eval join ' ', map { /^\$_$/ ? $item->{$property} : $_ } @{$expr};
+                }
+            }
+        }
+        for (keys %test) {
+            delete $self->getItems()->{$_} unless (grep $_, values %{$self->getItems()->{$_}});
+        }
+    } else {
+        croak(CTM::Base::_myErrorMessage($subName, CTM::Base::_myUsageMessage('$obj->' . $subName, "{ 'property' => 'expr' }")));
+    }
+    return $self;
 }
 
 #-> Perl BuiltIn
@@ -128,20 +189,32 @@ __END__
 
 =head1 NOM
 
-C<CTM::Base::SubClass>
+CTM::Base::SubClass
 
 =head1 SYNOPSIS
 
 "Classe abstraite" des sous-modules ou sous-classes C<CTM::ReadEM>.
 Pour plus de details, voir la documention POD de C<CTM::ReadEM>.
 
-=head1 DEPENDANCES
+=head1 DEPENDANCES DIRECTES
 
-C<CTM::Base>, C<Carp>, C<Hash::Util>
+C<CTM::Base>
+
+C<Carp>
+
+C<String::Util>
+
+C<Hash::Util>
+
+C<Storable>
 
 =head1 NOTES
 
 Ce module est dedie aux sous-modules ou sous-classes C<CTM::ReadEM>.
+
+=head1 LIENS
+
+- Depot GitHub : http://github.com/le-garff-yoann/CTM
 
 =head1 AUTEUR
 
