@@ -1,7 +1,7 @@
 CTM
 ===
 
-Consultation de Control-M Enterprise Manager 6/7/8 via son SGBD.
+Consultation de Control-M (Enterprise Manager ou Server) 6/7/8 via son SGBD.
 
 ### Installation :
 
@@ -13,13 +13,15 @@ make install
 make clean
 ```
 
-### Exemple :
+### Exemples :
+
+ControlM EM :
 
 ``` perl
 use CTM::ReadEM qw/:all/;
 
-my $session = CTM::ReadEM->newSession(
-    ctmEMVersion => 7,
+my $session = CTM::ReadEM->new(
+    version => 7,
     DBMSType => 'Pg',
     DBMSAddress => '127.0.0.1',
     DBMSPort => 3306,
@@ -28,24 +30,44 @@ my $session = CTM::ReadEM->newSession(
     DBMSPassword => 'root'
 );
 
-$session->connectToDB() || die $session->getError();
+$session->connect() || die $session->getError();
 
-my $servicesHashRef = $session->workOnCurrentServices();
+my $workOnServices = $session->workOnCurrentBIMServices();
 
 unless (defined ($err = $session->getError())) {
-    $servicesHashRef->keepItemsWithAnd({
-        service_name => ['$_', '=~', '/^SVC_HEADER_/']
+    $workOnServices->keepItemsWithAnd({
+        service_name => sub {
+            shift =~ /^SVC_HEADER_/
+        }
     });
-    printf "%s : %s\n", $_->{service_name}, getStatusColorForService($_) for (values %{$servicesHashRef->getItems()});
+    printf "%s : %s\n", $_->{service_name}, getStatusColorForService($_) for (values %{$workOnServices->getItems()});
 } else {
     die $err;
 }
 ```
 
-Pour toutes autres informations :
+ControlM Server :
 
+``` perl
+use CTM::ReadServer qw/:all/;
+
+my $session = CTM::ReadServer->new(
+    version => 7,
+    DBMSType => 'Pg',
+    DBMSAddress => '127.0.0.1',
+    DBMSPort => 3306,
+    DBMSInstance => 'ctmserver',
+    DBMSUser => 'root',
+    DBMSPassword => 'root'
+);
+
+# ce module n'est pas exploitable ATM.
 ```
-man CTM::ReadEM || perldoc CTM::ReadEM # ou CTM::Base, CTM::Base::SubClass, etc, ...
+
+### Pour toutes autres informations :
+
+``` bash
+perldoc CTM # ou CTM::ReadEM/CTM::ReadServer
 ```
 
 ### Sources disponibles sur :

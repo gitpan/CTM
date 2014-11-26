@@ -1,5 +1,5 @@
 #------------------------------------------------------------------------------------------------------
-# OBJET : "Classe abstraite" des sous-modules ou sous-classes de CTM::ReadEM
+# OBJET : "Classe abstraite" des sous-modules ou sous-classes de CTM::ReadEM::*
 # APPLICATION : Control-M
 # AUTEUR : Yoann Le Garff
 # DATE DE CREATION : 09/05/2014
@@ -37,18 +37,18 @@ use Storable qw/
 
 #----> ** variables de classe **
 
-our $VERSION = 0.18;
+our $VERSION = 0.181;
 
 #----> ** methodes privees **
 
 my $_clone = sub {
     my $self = shift;
     my $clone = {
-        CTM::Base::_CLASS_INFOS->{common}->{rootClass}->{propertyName} => $self->getParentClass(),
-        CTM::Base::_CLASS_INFOS->{common}->{objectProperties}->{subClassDatas}->{name} => dclone($self->getItems()),
-        CTM::Base::_CLASS_INFOS->{common}->{objectProperties}->{parameters}->{name} => dclone($self->getParams()),
-        CTM::Base::_CLASS_INFOS->{common}->{objectProperties}->{errors}->{name} => dclone($self->getErrors()),
-        CTM::Base::_CLASS_INFOS->{common}->{objectProperties}->{working}->{name} => 0
+        CTM::Base::_rootClassEMPrivate => $self->getParentClass(),
+        CTM::Base::_subClassDatasObjProperty => dclone($self->getItems()),
+        CTM::Base::_paramsObjProperty => dclone($self->getParams()),
+        CTM::Base::_errorsObjProperty => dclone($self->getErrors()),
+        CTM::Base::_workingObjProperty => 0
     };
     return bless $clone, ref $self;
 };
@@ -65,7 +65,7 @@ sub _resetAndRefresh {
         my $_errorsTemp = $self->getErrors();
         $self = $selfTemp;
         unlock_hash(%{$self});
-        $self->{CTM::Base::_CLASS_INFOS->{common}->{objectProperties}->{errors}->{name}} = $_errorsTemp;
+        $self->{CTM::Base::_errorsObjProperty} = $_errorsTemp;
         lock_hash(%{$self});
         return 1;
     } else {
@@ -77,17 +77,28 @@ sub _resetAndRefresh {
 #-> methodes en rapport avec les alarmes/alertes
 
 sub _setSerials {
-    my ($self, $childSub, $sqlRequest, $serialID) = @_;
+    my ($self, $childSub, $sqlRequest, $sqlRequestArgs, $serialID) = @_;
     my $subName = (caller 0)[3];
     if (caller->isa(__PACKAGE__)) {
         $self->_tagAtWork;
         $self->unshiftError();
         if ($self->getParentClass()->isSessionSeemAlive()) {
-            my @serialID = ($serialID eq 'ARRAY' && @{$serialID}) ? @{$serialID} : keys %{$self->getItems()};
-            if (@serialID) {
-                my $sth = $self->getParentClass()->_DBI()->prepare($sqlRequest . ' WHERE serial IN (' . join(', ', ('?') x @serialID) . ')');
+            $serialID = [keys %{$self->getItems()}] unless (ref $serialID eq 'ARRAY');
+            if (@{$serialID}) {
+                my $sth = $self->getParentClass()->_DBI()->prepare($sqlRequest . ' WHERE serial IN (' . join(', ', ('?') x @{$serialID}) . ')');
                 $self->getParentClass()->_invokeVerbose($subName, "\n". $sth->{Statement} . "\n");
-                if ($sth->execute(@serialID)) {
+                if ($sth->execute(@{$serialID})) {
+                    unlock_hash(%{$self->getItems()});
+                    if (%{$sqlRequestArgs}) {
+                        for my $currentID (@{$serialID}) {
+                            while (my ($field, $value) = each %{$sqlRequestArgs}) {
+                                $self->getItems()->{$currentID}->{$field} = $value;
+                            }
+                        }
+                    } else {
+                        delete $self->getItems()->{$_} for (@{$serialID});
+                    }
+                    lock_hash(%{$self->getItems()});
                     $self->_tagAtRest;
                     return 1;
                 } else {
@@ -121,32 +132,32 @@ sub countItems {
 
 sub getParentClass {
     my $self = shift;
-    return $self->{CTM::Base::_CLASS_INFOS->{common}->{rootClass}->{propertyName}};
+    return $self->{CTM::Base::_rootClassEMPrivate};
 }
 
 sub getParams {
     my $self = shift;
-    return $self->{CTM::Base::_CLASS_INFOS->{common}->{objectProperties}->{parameters}->{name}};
+    return $self->{CTM::Base::_paramsObjProperty};
 }
 
 sub getItems {
     my $self = shift;
-    return ref $self->{CTM::Base::_CLASS_INFOS->{common}->{objectProperties}->{subClassDatas}->{name}} eq 'HASH' ? $self->{CTM::Base::_CLASS_INFOS->{common}->{objectProperties}->{subClassDatas}->{name}} : {};
+    return ref $self->{CTM::Base::_subClassDatasObjProperty} eq 'HASH' ? $self->{CTM::Base::_subClassDatasObjProperty} : {};
 }
 
 sub keepItemsWithAnd {
     my ($self, $properties) = @_;
     my $subName = (caller 0)[3];
-    if (ref $properties eq 'HASH') {
+    if (ref $properties eq 'HASH' && ! grep { ref $_ ne 'CODE' } values %{$properties}) {
         while (my ($itemId, $item) = each %{$self->getItems()}) {
             while (my ($property, $expr) = each %{$properties}) {
-                if (defined $item->{$property} && ref $expr eq 'ARRAY' && @{$expr}) {
-                    delete $self->getItems()->{$itemId} unless (eval join ' ', map { /^\$_$/ ? $item->{$property} : $_ } @{$expr});
+                if (defined $item->{$property}) {
+                    delete $self->getItems()->{$itemId} unless $expr->($item->{$property});
                 }
             }
         }
     } else {
-        croak(CTM::Base::_myErrorMessage($subName, CTM::Base::_myUsageMessage('$obj->' . $subName, "{ 'property' => 'expr' }")));
+        croak(CTM::Base::_myErrorMessage($subName, CTM::Base::_myUsageMessage('$obj->' . $subName, "{ 'property' => \&codeRef }")));
     }
     return $self;
 }
@@ -154,21 +165,21 @@ sub keepItemsWithAnd {
 sub keepItemsWithOr {
     my ($self, $properties) = @_;
     my $subName = (caller 0)[3];
-    if (ref $properties eq 'HASH') {
+    if (ref $properties eq 'HASH' && ! grep { ref $_ ne 'CODE' } values %{$properties}) {
         my %test;
         while (my ($itemId, $item) = each %{$self->getItems()}) {
             $test{$itemId} = {};
             while (my ($property, $expr) = each %{$properties}) {
-                if (defined $item->{$property} && ref $expr eq 'ARRAY' && @{$expr}) {
-                    $test{$itemId}->{$property} = eval join ' ', map { /^\$_$/ ? $item->{$property} : $_ } @{$expr};
+                if (defined $item->{$property}) {
+                    $test{$itemId}->{$property} = $expr->($item->{$property});
                 }
             }
         }
         for (keys %test) {
-            delete $self->getItems()->{$_} unless (grep $_, values %{$self->getItems()->{$_}});
+            delete $self->getItems()->{$_} unless (grep $_, values %{$test{$_}});
         }
     } else {
-        croak(CTM::Base::_myErrorMessage($subName, CTM::Base::_myUsageMessage('$obj->' . $subName, "{ 'property' => 'expr' }")));
+        croak(CTM::Base::_myErrorMessage($subName, CTM::Base::_myUsageMessage('$obj->' . $subName, "{ 'property' => \&codeRef }")));
     }
     return $self;
 }
@@ -193,8 +204,8 @@ CTM::Base::SubClass
 
 =head1 SYNOPSIS
 
-"Classe abstraite" des sous-modules ou sous-classes C<CTM::ReadEM>.
-Pour plus de details, voir la documention POD de C<CTM::ReadEM>.
+"Classe abstraite" des sous-modules ou sous-classes C<CTM::ReadEM::*>.
+Pour plus de details, voir la documention POD de C<CTM>.
 
 =head1 DEPENDANCES DIRECTES
 
@@ -210,7 +221,7 @@ C<Storable>
 
 =head1 NOTES
 
-Ce module est dedie aux sous-modules ou sous-classes C<CTM::ReadEM>.
+Ce module est dedie aux sous-modules ou sous-classes C<CTM::ReadEM::*>.
 
 =head1 LIENS
 

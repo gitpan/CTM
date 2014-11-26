@@ -19,6 +19,7 @@ use warnings;
 
 use base qw/
     CTM::Base
+    CTM::Base::MainClass
 /;
 
 use Exporter::Easy (
@@ -34,8 +35,8 @@ use Exporter::Easy (
         getExprForStatusColorForService
         getExprForSeverityForAlarms
         getExprForSeverityForExceptionAlerts
-        getNbSessionsCreated
-        getNbSessionsConnected
+        getNbEMSessionsCreated
+        getNbEMSessionsConnected
     /],
     TAGS => [
         ctmFunctions => [qw/
@@ -47,8 +48,8 @@ use Exporter::Easy (
             getExprForSeverityForExceptionAlerts
         /],
         sessionFunctions => [qw/
-            getNbSessionsCreated
-            getNbSessionsConnected
+            getNbEMSessionsCreated
+            getNbEMSessionsConnected
         /],
         allFunctions => [qw/
             :ctmFunctions
@@ -71,8 +72,7 @@ use Sub::Name qw/
 use Carp qw/
     croak
 /;
-use String::Util qw /
-    hascontent
+use String::Util qw/
     crunch
 /;
 use List::MoreUtils qw/
@@ -87,22 +87,16 @@ use Date::Calc 6.0, qw/
     Date_to_Time
 /;
 use POSIX qw/
-    :signal_h
     strftime
 /;
-use Try::Tiny;
-use Perl::OSType qw/
-    is_os_type
-/;
-use DBI;
 
 #----> ** variables de classe **
 
-our $VERSION = 0.18;
+our $VERSION = 0.181;
 
-my %_sessionsState = (
-    CTM::Base::_CLASS_INFOS->{rootClass}->{classProperties}->{nbSessionsInstanced}->{name} => 0,
-    CTM::Base::_CLASS_INFOS->{rootClass}->{classProperties}->{nbSessionsConnected}->{name} => 0
+my %_emSessionsState = (
+    CTM::Base::_nbSessionsInstancedClassProperty => 0,
+    CTM::Base::_nbSessionsConnectedClassProperty => 0
 );
 
 #----> ** fonctions privees (mais accessibles a l'utilisateur pour celles qui ne sont pas des references) **
@@ -182,190 +176,86 @@ sub getExprForStatusColorForService($) {
     my ($status, $subName) = (shift, (caller 0)[3]);
     croak(CTM::Base::_myErrorMessage($subName, CTM::Base::_myUsageMessage($subName, '$definedStatus'))) unless (defined $status);
     for ($status) {
-        /^OK$/ && return ['$_', '==', '4'];
-        /^Completed OK$/ && return ['$_', '==', '8'];
-        /^Error$/ && return ['$_', '>=', '16', '&&', '$_', '<', '128'];
-        /^Warning$/ && return ['$_', '>=', '128', '&&', '$_', '<', '256'];
-        /^Completed Late$/ && return ['$_', '>', '256'];
+        /^OK$/i && return sub {
+            shift == 4
+        };
+        /^Completed OK$/i && return sub {
+            shift == 8
+        };
+        /^Error$/i && return sub {
+            $_[0] >= 16 && $_[0] < 128
+        };
+        /^Warning$/i && return sub {
+            $_[0] >= 128 && $_[0] < 256
+        };
+        /^Completed Late$/i && return sub {
+            shift > 256
+        };
     }
-    return ['$_', '=~', '//'];
+    return sub {
+        shift =~ //
+    };
 }
 
 sub getExprForSeverityForAlarms($) {
     my ($severity, $subName) = (shift, (caller 0)[3]);
     croak(CTM::Base::_myErrorMessage($subName, CTM::Base::_myUsageMessage($subName, '$definedSeverity'))) unless (defined $severity);
     for ($severity) {
-        /^Regular$/i && return ['$_', 'eq', "'R'"];
-        /^Urgent$/i && return ['$_', 'eq', "'U'"];
-        /^Very Urgent$/i && return ['$_', 'eq', "'V'"];
+        /^Regular$/i && return sub {
+            shift eq 'R'
+        };
+        /^Urgent$/i && return sub {
+            shift eq 'U'
+        };
+        /^Very Urgent$/i && return sub {
+            shift eq 'V'
+        };
     }
-    return ['$_', '=~', '//'];
+    return sub {
+        shift =~ //
+    };
 }
 
 sub getExprForSeverityForExceptionAlerts($) {
     my ($severity, $subName) = (shift, (caller 0)[3]);
     croak(CTM::Base::_myErrorMessage($subName, CTM::Base::_myUsageMessage($subName, '$definedSeverity'))) unless (defined $severity);
     for ($severity) {
-        /^Warning$/i && return ['$_', '==', '3'];
-        /^Error$/i && return ['$_', '==', '2'];
-        /^Severe$/i && return ['$_', '==', '1'];
+        /^Warning$/i && return sub {
+            shift == 3
+        };
+        /^Error$/i  && return sub {
+            shift == 2
+        };
+        /^Severe$/i  && return sub {
+            shift == 1
+        };
     }
-    return ['$_', '=~', '//'];
+    return sub {
+        shift =~ //
+    };
 }
 
-sub getNbSessionsCreated {
-    return $_sessionsState{CTM::Base::_CLASS_INFOS->{rootClass}->{classProperties}->{nbSessionsInstanced}->{name}};
+sub getNbEMSessionsCreated {
+    return $_emSessionsState{CTM::Base::_nbSessionsInstancedClassProperty};
 }
 
-sub getNbSessionsConnected {
-    return $_sessionsState{CTM::Base::_CLASS_INFOS->{rootClass}->{classProperties}->{nbSessionsConnected}->{name}};
+sub getNbEMSessionsConnected {
+    return $_emSessionsState{CTM::Base::_nbSessionsConnectedClassProperty};
 }
 
 #----> ** methodes privees **
 
-#-> wrapper methodes DBI
-
-my $_doesTablesExists = sub {
-    my ($self, @tablesName) = @_;
-    my @inexistingSQLTables;
-    for (@tablesName) {
-        my $sth = $self->_DBI()->table_info(undef, 'public', $_, 'TABLE');
-        if ($sth->execute()) {
-            push @inexistingSQLTables, $_ unless ($sth->fetchrow_array());
-        } else {
-            return 0, crunch($self->_DBI()->errstr());
-        }
-    }
-    return 1, \@inexistingSQLTables;
-};
-
-#-> constructeurs/destructeurs (methode privee)
-
-my $_new = subname 'new' => sub {
-    my ($class, %params) = @_;
-    my $self = {};
-    my $subName = (caller 0)[3];
-    if (defined $params{ctmEMVersion} && defined $params{DBMSType} && defined $params{DBMSAddress} && defined $params{DBMSPort} && defined $params{DBMSInstance} && defined $params{DBMSUser}) {
-        $self->{_ctmEMVersion} = $params{ctmEMVersion};
-        $self->{DBMSType} = $params{DBMSType};
-        $self->{DBMSAddress} = $params{DBMSAddress};
-        $self->{DBMSPort} = $params{DBMSPort};
-        $self->{DBMSInstance} = $params{DBMSInstance};
-        $self->{DBMSUser} = $params{DBMSUser};
-        $self->{DBMSPassword} = exists $params{DBMSPassword} ? $params{DBMSPassword} : undef;
-        $self->{DBMSConnectTimeout} = $params{DBMSConnectTimeout} || 0;
-        $self->{CTM::Base::_CLASS_INFOS->{common}->{objectProperties}->{verbose}->{name}} = $params{CTM::Base::_CLASS_INFOS->{common}->{objectProperties}->{verbose}->{name}} || 0;
-    } else {
-        croak(CTM::Base::_myErrorMessage($subName, CTM::Base::_myUsageMessage($subName, "<un ou plusieurs parametres obligatoires n'ont pas ete renseignes>")));
-    }
-    $self->{CTM::Base::_CLASS_INFOS->{common}->{objectProperties}->{working}->{name}} = 0;
-    $self->{CTM::Base::_CLASS_INFOS->{common}->{objectProperties}->{errors}->{name}} = [];
-    $self->{CTM::Base::_CLASS_INFOS->{common}->{objectProperties}->{DBI}->{name}} = undef;
-    $self->{CTM::Base::_CLASS_INFOS->{common}->{objectProperties}->{sessionIsConnected}->{name}} = 0;
-    $class = ref $class || $class;
-    $_sessionsState{CTM::Base::_CLASS_INFOS->{rootClass}->{classProperties}->{nbSessionsInstanced}->{name}}++;
-    return bless $self, $class;
-};
+#-> constructeurs/destructeurs
 
 my $_subClassConstructor = sub {
     my ($self, $subClassLastName, $baseMethod, %params) = @_;
     my $subSelf = {};
-    $subSelf->{CTM::Base::_CLASS_INFOS->{common}->{rootClass}->{propertyName}} = $self;
-    $subSelf->{CTM::Base::_CLASS_INFOS->{common}->{objectProperties}->{working}->{name}} = 0;
-    $subSelf->{CTM::Base::_CLASS_INFOS->{common}->{objectProperties}->{errors}->{name}} = [];
-    $subSelf->{CTM::Base::_CLASS_INFOS->{common}->{objectProperties}->{parameters}->{name}} = \%params;
-    $subSelf->{CTM::Base::_CLASS_INFOS->{common}->{objectProperties}->{subClassDatas}->{name}} = $self->$baseMethod(%params);
+    $subSelf->{CTM::Base::_rootClassEMPrivate} = $self;
+    $subSelf->{CTM::Base::_workingObjProperty} = 0;
+    $subSelf->{CTM::Base::_errorsObjProperty} = [];
+    $subSelf->{CTM::Base::_paramsObjProperty} = \%params;
+    $subSelf->{CTM::Base::_subClassDatasObjProperty} = $self->$baseMethod(%params);
     return bless $subSelf, __PACKAGE__ . '::' . $subClassLastName;
-};
-
-my $_connect = subname 'connect' => sub {
-    my ($self, $subName) = (shift, (caller 0)[3]);
-    $self->unshiftError();
-    if (defined $self->{_ctmEMVersion} && $self->{_ctmEMVersion} =~ /^[678]$/ && defined $self->{DBMSType} && $self->{DBMSType} =~ /^(Pg|Oracle|mysql|Sybase|ODBC)$/ && hascontent($self->{DBMSAddress}) && defined $self->{DBMSPort} && $self->{DBMSPort} =~ /^\d+$/ && $self->{DBMSPort} >= 0 && $self->{DBMSPort} <= 65535 && defined hascontent($self->{DBMSInstance}) && hascontent($self->{DBMSUser}) && defined $self->{DBMSConnectTimeout} && $self->{DBMSConnectTimeout} =~ /^\d+$/) {
-        unless ($self->isSessionSeemAlive()) {
-            if (eval 'require DBD::' . $self->{DBMSType}) {
-                my $myOSIsUnix = is_os_type('Unix', 'dragonfly');
-                my $ALRMDieSub = sub {
-                    die "'DBI' : impossible de se connecter (timeout atteint) a la base '" . $self->{DBMSType} . ", instance '" .  $self->{DBMSInstance} . "' du serveur '" .  $self->{DBMSType} . "'.";
-                };
-                my $oldaction;
-                if ($myOSIsUnix) {
-                    my $mask = POSIX::SigSet->new(SIGALRM);
-                    my $action = POSIX::SigAction->new(
-                        \&$ALRMDieSub,
-                        $mask
-                    );
-                    $oldaction = POSIX::SigAction->new();
-                    sigaction(SIGALRM, $action, $oldaction);
-                } else {
-                    local $SIG{ALRM} = \&$ALRMDieSub;
-                }
-                try {
-                    my $connectionString = 'dbi:' . $self->{DBMSType};
-                    if ($self->{DBMSType} eq 'ODBC') {
-                        $connectionString .= ':driver={SQL Server};server=' . $self->{DBMSAddress} . ',' . $self->{DBMSPort} . ';database=' . $self->{DBMSInstance};
-                    } else {
-                        $connectionString .= ':host=' . $self->{DBMSAddress} . ';database=' . $self->{DBMSInstance} . ';port=' . $self->{DBMSPort};
-                    }
-                    alarm $self->{DBMSConnectTimeout};
-                    $self->{CTM::Base::_CLASS_INFOS->{common}->{objectProperties}->{DBI}->{name}} = DBI->connect(
-                        $connectionString,
-                        $self->{DBMSUser},
-                        $self->{DBMSPassword},
-                        {
-                            RaiseError => 0,
-                            PrintError => 0,
-                            AutoCommit => 1
-                        }
-                    );
-                    $self->_addError(CTM::Base::_myErrorMessage($subName, "'DBI' : '" . crunch($DBI::errstr) . "'.")) if (defined $DBI::errstr);
-                } catch {
-                    $self->_addError(CTM::Base::_myErrorMessage($subName, $_));
-                } finally {
-                    alarm 0;
-                    sigaction(SIGALRM, $oldaction) if ($myOSIsUnix);
-                };
-                unless (defined $self->getError()) {
-                    my ($situation, $inexistingSQLTables) = $self->$_doesTablesExists(qw/bim_log bim_prob_jobs bim_alert comm download alarm exception_alerts/);
-                    if ($situation) {
-                        unless (@{$inexistingSQLTables}) {
-                            $self->_tagSessionAsConnected();
-                            $_sessionsState{CTM::Base::_CLASS_INFOS->{rootClass}->{classProperties}->{nbSessionsConnected}->{name}}++;
-                            return 1;
-                        } else {
-                            $self->_addError(CTM::Base::_myErrorMessage($subName, "la connexion au SGBD est etablie mais il manque une ou plusieurs tables ('" . join("', '", @{$inexistingSQLTables}) . "') qui sont requises ."));
-                        }
-                    } else {
-                        $self->_addError(CTM::Base::_myErrorMessage($subName, "la connexion est etablie mais la methode DBI 'execute()' a echouee : '" . $inexistingSQLTables . "'."));
-                    }
-                }
-            } else {
-                $self->_addError(CTM::Base::_myErrorMessage($subName, "impossible de charger le module 'DBD::" . $self->{DBMSType} . "' : '" . crunch($@) . "'. Les drivers disponibles sont '" . $self->_DBI()->available_drivers() . "'."));
-            }
-        } else {
-            $self->_addError(CTM::Base::_myErrorMessage($subName, "impossible de se connecter car cette instance est deja connectee."));
-        }
-    } else {
-        croak(CTM::Base::_myErrorMessage($subName, CTM::Base::_myUsageMessage($subName, "<un ou plusieurs parametres ne sont pas valides>")));
-    }
-    return 0;
-};
-
-my $_disconnect = subname 'disconnect' => sub {
-    my ($self, $subName) = (shift, (caller 0)[3]);
-    $self->unshiftError();
-    if ($self->isSessionSeemAlive()) {
-        if ($self->_DBI()->disconnect()) {
-            $self->_tagSessionAsDisconnected();
-            $_sessionsState{CTM::Base::_CLASS_INFOS->{rootClass}->{classProperties}->{nbSessionsConnected}->{name}}--;
-            return 1;
-        } else {
-            $self->_addError(CTM::Base::_myErrorMessage($subName, 'DBI : ' . crunch($self->_DBI()->errstr())));
-        }
-    } else {
-        $self->_addError(CTM::Base::_myErrorMessage($subName, "impossible de clore la connexion car cette instance n'est pas connectee."));
-    }
-    return 0;
 };
 
 #-> directement liees aux actions sur le SGBD
@@ -500,38 +390,6 @@ SQL
     }
 };
 
-#----> ** methodes protegees **
-
-sub _DBI {
-    my ($self, $property, $value) = @_;
-    if (caller->isa(__PACKAGE__)) {
-        return $self->{CTM::Base::_CLASS_INFOS->{common}->{objectProperties}->{DBI}->{name}}
-    } else {
-        carp(_myErrorMessage((caller 0)[3], "tentative d'utilisation d'une methode protegee."));
-    }
-    return 0;
-}
-
-sub _tagSessionAsConnected {
-    my ($self, $property, $value) = @_;
-    if (caller->isa(__PACKAGE__)) {
-        return $self->_setObjProperty(CTM::Base::_CLASS_INFOS->{common}->{objectProperties}->{sessionIsConnected}->{name}, 1);
-    } else {
-        carp(_myErrorMessage((caller 0)[3], "tentative d'utilisation d'une methode protegee."));
-    }
-    return 0;
-}
-
-sub _tagSessionAsDisconnected {
-    my ($self, $property, $value) = @_;
-    if (caller->isa(__PACKAGE__)) {
-        return $self->_setObjProperty(CTM::Base::_CLASS_INFOS->{common}->{objectProperties}->{sessionIsConnected}->{name}, 0);
-    } else {
-        carp(_myErrorMessage((caller 0)[3], "tentative d'utilisation d'une methode protegee."));
-    }
-    return 0;
-}
-
 #----> ** methodes publiques **
 
 #-> wrappers de constructeurs/destructeurs
@@ -539,8 +397,9 @@ sub _tagSessionAsDisconnected {
 sub new {
     my $subName = (caller 0)[3];
     croak(CTM::Base::_myErrorMessage($subName, CTM::Base::_myUsageMessage('$session->' . $subName, "'cle' => 'valeur'"))) unless (@_ % 2);
-    my $self = shift->$_new(@_);
+    my $self = shift->SUPER::_new(@_);
     lock_hash(%{$self});
+    $_emSessionsState{CTM::Base::_nbSessionsInstancedClassProperty}++;
     return $self;
 }
 
@@ -548,9 +407,18 @@ sub new {
 
 sub connect {
     my $self = shift;
-    unlock_value(%{$self}, CTM::Base::_CLASS_INFOS->{common}->{objectProperties}->{DBI}->{name});
-    my $return = $self->$_connect(@_);
-    lock_value(%{$self}, CTM::Base::_CLASS_INFOS->{common}->{objectProperties}->{DBI}->{name});
+    unlock_value(%{$self}, CTM::Base::_DBIObjProperty);
+    my $return = $self->SUPER::_connect(qw/
+        download
+        bim_log
+        bim_prob_jobs
+        bim_alert
+        comm
+        alarm
+        exception_alerts
+    /);
+    lock_value(%{$self}, CTM::Base::_DBIObjProperty);
+    $_emSessionsState{CTM::Base::_nbSessionsConnectedClassProperty}++ if ($self->isSessionSeemAlive());
     return $return;
 }
 
@@ -558,9 +426,10 @@ sub connect {
 
 sub disconnect {
     my $self = shift;
-    unlock_value(%{$self}, CTM::Base::_CLASS_INFOS->{common}->{objectProperties}->{DBI}->{name});
-    my $return = $self->$_disconnect(@_);
-    lock_value(%{$self}, CTM::Base::_CLASS_INFOS->{common}->{objectProperties}->{DBI}->{name});
+    unlock_value(%{$self}, CTM::Base::_DBIObjProperty);
+    my $return = $self->_disconnect();
+    lock_value(%{$self}, CTM::Base::_DBIObjProperty);
+    $_emSessionsState{CTM::Base::_nbSessionsConnectedClassProperty}-- unless ($self->isSessionSeemAlive());
     return $return;
 }
 
@@ -583,7 +452,7 @@ sub getCurrentBIMServices {
                     if (defined (my $downloadTimeInTimestamp = Date_to_Time(split /[\/:\s]+/, $datacenterInfos->{$datacenter}->{download_time_to_char}))) {
                         delete $datacenterInfos->{$datacenter} unless ($downloadTimeInTimestamp >= $datacenterOdateStart && $downloadTimeInTimestamp <= $datacenterOdateEnd);
                     } else {
-                        $self->_addError(CTM::Base::_myErrorMessage($subName, "le champ 'download_time_to_char' qui derive de la cle 'download_time' (DATETIME) via la fonction SQL TO_CHAR() (Control-M '" . $datacenterInfos->{$datacenter}->{service_name} . "') n'est pas correct ou n'est pas gere par le module. Il est possible que la base de donnees du Control-M EM soit corrompue ou que la version renseignee (version '" . $self->{_ctmEMVersion} . "') ne soit pas correcte."));
+                        $self->_addError(CTM::Base::_myErrorMessage($subName, "le champ 'download_time_to_char' qui derive de la cle 'download_time' (DATETIME) via la fonction SQL TO_CHAR() (Control-M '" . $datacenterInfos->{$datacenter}->{service_name} . "') n'est pas correct ou n'est pas gere par le module. Il est possible que la base de donnees du Control-M EM soit corrompue ou que la version renseignee (version '" . $self->{_version} . "') ne soit pas correcte."));
                         return 0;
                     }
                 } else {
@@ -617,7 +486,7 @@ sub getCurrentBIMServices {
 sub workOnCurrentBIMServices {
     my $subName = (caller 0)[3];
     croak(CTM::Base::_myErrorMessage($subName, CTM::Base::_myUsageMessage('$session->' . $subName, "'cle' => 'valeur'"))) unless (@_ % 2);
-    my $self = shift->$_subClassConstructor(CTM::Base::_CLASS_INFOS->{BIMCurrentBIMServices}->{moduleLastName}, CTM::Base::_CLASS_INFOS->{BIMCurrentBIMServices}->{baseMethod}, @_);
+    my $self = shift->$_subClassConstructor(CTM::Base::_currentBIMServicesModuleLastName, CTM::Base::_currentBIMServicesBaseMethod, @_);
     lock_hash(%{$self});
     return $self;
 }
@@ -645,7 +514,7 @@ sub getAlarms {
 sub workOnAlarms {
     my $subName = (caller 0)[3];
     croak(CTM::Base::_myErrorMessage($subName, CTM::Base::_myUsageMessage('$session->' . $subName, "'cle' => 'valeur'"))) unless (@_ % 2);
-    my $self = shift->$_subClassConstructor(CTM::Base::_CLASS_INFOS->{GASAlarms}->{moduleLastName}, CTM::Base::_CLASS_INFOS->{GASAlarms}->{baseMethod}, @_);
+    my $self = shift->$_subClassConstructor(CTM::Base::_alarmsModuleLastName, CTM::Base::_alarmsBaseMethod, @_);
     lock_hash(%{$self});
     return $self;
 }
@@ -673,7 +542,7 @@ sub getExceptionAlerts {
 sub workOnExceptionAlerts {
     my $subName = (caller 0)[3];
     croak(CTM::Base::_myErrorMessage($subName, CTM::Base::_myUsageMessage('$session->' . $subName, "'cle' => 'valeur'"))) unless (@_ % 2);
-    my $self = shift->$_subClassConstructor(CTM::Base::_CLASS_INFOS->{GASExceptionAlerts}->{moduleLastName}, CTM::Base::_CLASS_INFOS->{GASExceptionAlerts}->{baseMethod}, @_);
+    my $self = shift->$_subClassConstructor(CTM::Base::_exceptionAlertsModuleLastName, CTM::Base::_exceptionAlertsBaseMethod, @_);
     lock_hash(%{$self});
     return $self;
 }
@@ -701,7 +570,7 @@ sub workOnExceptionAlerts {
 # sub workOnComponents {
     # my $subName = (caller 0)[3];
     # croak(CTM::Base::_myErrorMessage($subName, CTM::Base::_myUsageMessage('$session->' . $subName, "'cle' => 'valeur'"))) unless (@_ % 2);
-    # my $self = shift->$_subClassConstructor(CTM::Base::_CLASS_INFOS->{CMComponents}->{moduleLastName}, CTM::Base::_CLASS_INFOS->{CMComponents}->{baseMethod}, @_);
+    # my $self = shift->$_subClassConstructor(CTM::Base::_componentsModuleLastName, CTM::Base::_componentsBaseMethod, @_);
     # lock_hash(%{$self});
     # return $self;
 # }
@@ -709,19 +578,11 @@ sub workOnExceptionAlerts {
 #-> accesseurs/mutateurs
 
 sub isSessionAlive {
-    my $self = shift;
-    $self->unshiftError();
-    if ($self->isSessionSeemAlive()) {
-        return $self->_DBI()->ping();
-    } else {
-        $self->_addError(CTM::Base::_myErrorMessage((caller 0)[3], "impossible de tester l'etat de la connexion au SGBD car celle ci n'est pas active."));
-    }
-    return 0;
+    return shift->SUPER::_isSessionAlive();
 }
 
 sub isSessionSeemAlive {
-    my $self = shift;
-    return ref $self->_DBI() eq 'DBI::db' && $self->{CTM::Base::_CLASS_INFOS->{common}->{objectProperties}->{sessionIsConnected}->{name}};
+    return shift->SUPER::_isSessionSeemAlive()
 }
 
 #-> Perl BuiltIn
@@ -733,7 +594,7 @@ BEGIN {
 sub DESTROY {
     my $self = shift;
     $self->disconnect();
-    $_sessionsState{CTM::Base::_CLASS_INFOS->{rootClass}->{classProperties}->{nbSessionsInstanced}->{name}}--;
+    $_emSessionsState{CTM::Base::_nbSessionsInstancedClassProperty}--;
 }
 
 1;
@@ -746,14 +607,14 @@ __END__
 
 =head1 NOM
 
-CTM::ReadEM - Consultation de Control-M EM 6/7/8 a travers son SGBD. Point d'entree des modules OO C<CTM>.
+CTM::ReadEM - Consultation de Control-M EM 6/7/8 a travers son SGBD.
 
 =head1 SYNOPSIS
 
     use CTM::ReadEM qw/:functions/;
 
     my $session = CTM::ReadEM->new(
-        ctmEMVersion => 7,
+        version => 7,
         DBMSType => "Pg",
         DBMSAddress => "127.0.0.1",
         DBMSPort => 3306,
@@ -764,13 +625,15 @@ CTM::ReadEM - Consultation de Control-M EM 6/7/8 a travers son SGBD. Point d'ent
 
     $session->connect() || die $session->getError();
 
-    my $servicesHashRef = $session->workOnCurrentBIMServices();
+    my $workOnServices = $session->workOnCurrentBIMServices();
 
     unless (defined ($err = $session->getError())) {
-        $servicesHashRef->keepItemsWithAnd({
-            service_name => ['$_', '=~', '/^SVC_HEADER_/']
+        $workOnServices->keepItemsWithAnd({
+            service_name => sub {
+                shift =~ /^SVC_HEADER_/
+            }
         });
-        print $_->{service_name} . " : " . getStatusColorForService($_) . "\n" for (values %{$servicesHashRef->getItems()});
+        print $_->{service_name} . " : " . getStatusColorForService($_) . "\n" for (values %{$workOnServices->getItems()});
     } else {
         die $err;
     }
@@ -778,6 +641,8 @@ CTM::ReadEM - Consultation de Control-M EM 6/7/8 a travers son SGBD. Point d'ent
 =head1 DEPENDANCES DIRECTES
 
 C<CTM::Base>
+
+C<CTM::Base::MainClass>
 
 C<CTM::ReadEM::workOnCurrentBIMServices>
 
@@ -800,14 +665,6 @@ C<Exporter::Easy>
 C<Date::Calc>
 
 C<POSIX>
-
-C<Try::Tiny>
-
-C<Perl::OSType>
-
-C<DBI>
-
-C<DBD::?>
 
 =head1 TAGS (C<CTM::ReadEM>)
 
@@ -834,7 +691,7 @@ Importe les fonctions publiques listees au lien suivant : L<"... liees a la gene
 Cette methode est le constructeur du module C<CTM::ReadEM>. C<CTM::ReadEM-E<gt>newSession()> est un equivalent.
 
     my $session = CTM::ReadEM->new(
-        ctmEMVersion => 7,
+        version => 7,
         DBMSType => "Pg",
         DBMSAddress => "127.0.0.1",
         DBMSPort => 3306,
@@ -880,7 +737,7 @@ Le parametre "forLastNetName" accepte un booleen. Si il est vrai alors cette met
 
 Le parametre "handleDeletedJobs" accepte un booleen. Si il est vrai alors cette methode ne retournera que les services (jobs de type "BIM") qui n'ont pas ete supprimes du plan. Vrai par defaut.
 
-Le parametre "forStatus" doit etre une reference d'un tableau. Si c'est le cas, la methode ne retournera que les services avec les status renseignes (status valides (sensibles a la case) : "OK", "Completed_OK", "Completed_Late", "Warning", "Error") dans ce tableau.
+Le parametre "forStatus" doit etre une reference d'un tableau. Si c'est le cas, la methode ne retournera que les services avec les statuts renseignes (statuts valides (sensibles a la case) : "OK", "Completed_OK", "Completed_Late", "Warning", "Error") dans ce tableau.
 
 Le parametre "forDataCenters" doit etre une reference d'un tableau. Si c'est le cas, la methode ne retournera que les services pour les datacenters renseignes.
 
@@ -936,23 +793,23 @@ Retourne toujours un objet. L'objet retourne est le meme que celui sur lequel ce
         timestamp => getExprForStatusColorForService('OK')
     });
 
-Cette methode permet de filtrer les Items de l'objet a conserver en fonction d'une ou plusieurs expressions (chacun des elements de l'expression sont les elements d'une reference de tableau) evaluees. Toutes les expressions doivent etre respectees pour que l'item soit conserve sur l'objet.
+Cette methode permet de filtrer les items (de l'objet) a conserver en opposant a un ou plusieurs champs de chacuns des items une reference de fonction passee. Toutes les tests sur les champs doivent etre positifs pour que l'item soit conserve sur l'objet.
 
 =head3 $workOnServices->keepItemsWithOr({})
 
 Retourne toujours un objet. L'objet retourne est le meme que celui sur lequel cette methode est invoquee.
 
-Cette methode permet de filtrer les Items de l'objet a conserver en fonction d'une ou plusieurs expressions (chacun des elements de l'expression sont les elements d'une reference de tableau) evaluees. Une expression minimum doit etre respectee pour que l'item soit conserve sur l'objet.
+Cette methode permet de filtrer les items (de l'objet) a conserver en opposant a un ou plusieurs champs de chacuns des items une reference de fonction passee. Un test de champ minimum doit etre positif pour que l'item soit conserve sur l'objet.
 
 =head3 $workOnServices->getProblematicsJobs()
 
-Retourne une reference vers une table de hachage qui contient la liste des jobs Control-M problematiques pour chaque "log_id".
+Retourne une reference vers une table de hachage qui contient la liste des jobs Control-M problematiques pour chaque "log_id" (accepte une reference de tableau de "log_id" en parametre sinon utilise les "log_id" de l'objet).
 
 Retourne 0 si la methode a echouee.
 
 =head3 $workOnServices->getAlerts()
 
-Retourne une reference vers une table de hachage qui contient la liste des alertes pour chaque "log_id".
+Retourne une reference vers une table de hachage qui contient la liste des alertes pour chaque "log_id" (accepte une reference de tableau de "log_id" en parametre sinon utilise les "log_id" de l'objet).
 
 Retourne 0 si la methode a echouee.
 
@@ -1022,13 +879,13 @@ Retourne toujours un objet. L'objet retourne est le meme que celui sur lequel ce
         severity => getExprForSeverityForAlarms('Regular')
     });
 
-Cette methode permet de filtrer les Items de l'objet a conserver en fonction d'une ou plusieurs expressions (chacun des elements de l'expression sont les elements d'une reference de tableau) evaluees. Toutes les expressions doivent etre respectees pour que l'item soit conserve sur l'objet.
+Cette methode permet de filtrer les items (de l'objet) a conserver en opposant a un ou plusieurs champs de chacuns des items une reference de fonction passee. Toutes les tests sur les champs doivent etre positifs pour que l'item soit conserve sur l'objet.
 
 =head3 $workOnAlarms->keepItemsWithOr({})
 
 Retourne toujours un objet. L'objet retourne est le meme que celui sur lequel cette methode est invoquee.
 
-Cette methode permet de filtrer les Items de l'objet a conserver en fonction d'une ou plusieurs expressions (chacun des elements de l'expression sont les elements d'une reference de tableau) evaluees. Une expression minimum doit etre respectee pour que l'item soit conserve sur l'objet.
+Cette methode permet de filtrer les items (de l'objet) a conserver en opposant a un ou plusieurs champs de chacuns des items une reference de fonction passee. Un test de champ minimum doit etre positif pour que l'item soit conserve sur l'objet.
 
 =head3 $workOnAlarms->notice(\@array_ref_of_id)
 
@@ -1156,13 +1013,13 @@ Retourne toujours un objet. L'objet retourne est le meme que celui sur lequel ce
         severity => getExprForSeverityForExceptionAlerts('Severe')
     });
 
-Cette methode permet de filtrer les Items de l'objet a conserver en fonction d'une ou plusieurs expressions (chacun des elements de l'expression sont les elements d'une reference de tableau) evaluees. Toutes les expressions doivent etre respectees pour que l'item soit conserve sur l'objet.
+Cette methode permet de filtrer les items (de l'objet) a conserver en opposant a un ou plusieurs champs de chacuns des items une reference de fonction passee. Toutes les tests sur les champs doivent etre positifs pour que l'item soit conserve sur l'objet.
 
 =head3 $workOnExceptionAlerts->keepItemsWithOr({})
 
 Retourne toujours un objet. L'objet retourne est le meme que celui sur lequel cette methode est invoquee.
 
-Cette methode permet de filtrer les Items de l'objet a conserver en fonction d'une ou plusieurs expressions (chacun des elements de l'expression sont les elements d'une reference de tableau) evaluees. Une expression minimum doit etre respectee pour que l'item soit conserve sur l'objet.
+Cette methode permet de filtrer les items (de l'objet) a conserver en opposant a un ou plusieurs champs de chacuns des items une reference de fonction passee. Un test de champ minimum doit etre positif pour que l'item soit conserve sur l'objet.
 
 =head3 $workOnExceptionAlerts->handle(\@array_ref_of_id)
 
@@ -1254,11 +1111,11 @@ Ce parametre accepte un booleen. Faux par defaut.
 
 =head2 getNbSession*()
 
-=head3 getNbSessionsCreated()
+=head3 getNbEMSessionsCreated()
 
 Retourne le nombre d instances en cours pour le module C<CTM::ReadEM>.
 
-=head3 getNbSessionsConnected()
+=head3 getNbEMSessionsConnected()
 
 Retourne le nombre d instances en cours et connectees a la base du Control-M EM pour le module C<CTM::ReadEM>.
 
@@ -1266,39 +1123,39 @@ Retourne le nombre d instances en cours et connectees a la base du Control-M EM 
 
 =head3 getStatusColorForService() - (BIM)
 
-Cette fonction permet de convertir le champ "status_to" de la table de hachage generee par la methode C<getCurrentBIMServices()> (et ses derives) en un status lisible ("OK", "Completed OK", "Completed Late", "Warning", "Error").
+Cette fonction permet de convertir le champ "status_to" de la table de hachage generee par la methode C<getCurrentBIMServices()> (et ses derives) en un statut lisible ("OK", "Completed OK", "Completed Late", "Warning", "Error").
 
 Retourne 0 si la valeur du parametre fourni n'est pas reconnu.
 
 =head3 getSeverityForAlarms() - (GAS)
 
-Cette fonction permet de convertir le champ "status_to" de la table de hachage generee par la methode C<getAlarms()> (et ses derives) en un status lisible ("Regular", "Urgent", "Very_Urgent").
+Cette fonction permet de convertir le champ "status_to" de la table de hachage generee par la methode C<getAlarms()> (et ses derives) en un statut lisible ("Regular", "Urgent", "Very_Urgent").
 
 Retourne 0 si la valeur du parametre fourni n'est pas reconnu.
 
 =head3 getSeverityForExceptionAlerts() - (EA)
 
-Cette fonction permet de convertir le champ "status_to" de la table de hachage generee par la methode C<getExceptionAlerts()> (et ses derives) en un status lisible ("Warning", "Error", "Severe").
+Cette fonction permet de convertir le champ "status_to" de la table de hachage generee par la methode C<getExceptionAlerts()> (et ses derives) en un statut lisible ("Warning", "Error", "Severe").
 
 Retourne 0 si la valeur du parametre fourni n'est pas reconnu.
 
 =head3 getExprForStatusColorForService() - (BIM)
 
-Cette fonction converti les status "OK", "Completed OK", "Completed Late", "Warning", et "Error" (valeurs possibles en parametre) en une expression (pouvant notamment etre evaluee par les methodes keepItemsWithAnd() et keepItemsWithOr()) sous la forme d'une reference de tableau.
+Cette fonction converti les statuts "OK", "Completed OK", "Completed Late", "Warning", et "Error" (valeurs possibles en parametre) en une reference de fonction (pouvant notamment etre utilisee par les methodes keepItemsWithAnd() et keepItemsWithOr()).
 
-Retourne l'expression ['!', '$_'] si le status fourni est inconnu.
+Retourne une reference vers la fonction anonyme sub { shift =~ // } si le statut fourni est inconnu.
 
 =head3 getExprForSeverityForAlarms() - (GAS)
 
-Cette fonction converti les status "Regular", "Urgent" et "Very_Urgent" (valeurs possibles en parametre) en une expression (pouvant notamment etre evaluee par les methodes keepItemsWithAnd() et keepItemsWithOr()) sous la forme d'une reference de tableau.
+Cette fonction converti les severites "Regular", "Urgent" et "Very_Urgent" (valeurs possibles en parametre) en une reference de fonction (pouvant notamment etre utilisee par les methodes keepItemsWithAnd() et keepItemsWithOr()).
 
-Retourne l'expression ['!', '$_'] si le status fourni est inconnu.
+Retourne une reference vers la fonction anonyme sub { shift =~ // } si la severite fourni est inconnu.
 
 =head3 getExprForSeverityForExceptionAlerts() - (EA)
 
-Cette fonction converti les status "Warning", "Error" et "Severe" (valeurs possibles en parametre) en une expression (pouvant notamment etre evaluee par les methodes keepItemsWithAnd() et keepItemsWithOr()) sous la forme d'une reference de tableau.
+Cette fonction converti les severites "Warning", "Error" et "Severe" (valeurs possibles en parametre) en une reference de fonction (pouvant notamment etre utilisee par les methodes keepItemsWithAnd() et keepItemsWithOr()).
 
-Retourne l'expression ['!', '$_'] si le status fourni est inconnu.
+Retourne une reference vers la fonction anonyme sub { shift =~ // } si le severites fourni est inconnu.
 
 =head1 METHODES PUBLIQUES (*)
 
@@ -1366,7 +1223,7 @@ Retourne toujours 1.
     use CTM::ReadEM qw/:functions/;
 
     my $session1 = CTM::ReadEM->new(
-        ctmEMVersion => 7,
+        version => 7,
         DBMSType => "Pg",
         DBMSAddress => "127.0.0.1",
         DBMSPort => 3306,
@@ -1375,7 +1232,7 @@ Retourne toujours 1.
         DBMSPassword => "root"
     );
 
-    print getNbSessionsCreated(); # affiche "1"
+    print getNbEMSessionsCreated(); # affiche "1"
 
 =head2 Recupere et affiche la liste des services actuellement en cours dans le BIM du Control-M EM
 

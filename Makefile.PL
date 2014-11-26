@@ -1,5 +1,5 @@
 #------------------------------------------------------------------------------------------------------
-# OBJET : Installation de CTM::* et de ses dependances
+# OBJET : Makefile.PL du module CTM
 # APPLICATION : ControlM
 # AUTEUR : Yoann Le Garff
 # DATE DE CREATION : 16/05/2014
@@ -32,7 +32,7 @@ WriteMakefile(
         }
     },
     LICENSE => 'perl',
-    VERSION_FROM => 'lib/CTM/ReadEM.pm',
+    VERSION_FROM => 'lib/CTM.pm',
     MIN_PERL_VERSION => '5.6.1',
     CONFIGURE_REQUIRES => {
        'ExtUtils::MakeMaker' => 6.64
@@ -46,13 +46,15 @@ WriteMakefile(
         'POSIX'  => 0,
         'Try::Tiny' => 0,
         'Perl::OSType' => 0,
+        'Scalar::Util' => 0,
         'String::Util' => 0,
         'List::MoreUtils' => 0,
         'Storable' => 0,
         'DBI'  => 0,
     },
     TEST_REQUIRES => {
-        'Test::More' => 0
+        'Test::More' => 0,
+        'Scalar::Util' => 0
     },
     test => {
         TESTS => 't/*.t'
@@ -74,7 +76,7 @@ Makefile.PL
 
 =head1 SYNOPSIS
 
-Makefile.PL pour les modules C<CTM::*>.
+Makefile.PL du module C<CTM>.
 
 =head1 DEPENDANCES
 

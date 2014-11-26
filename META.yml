@@ -4,6 +4,7 @@ author:
   - 'Le Garff Yoann <pe.weeble@yahoo.fr>'
 build_requires:
   ExtUtils::MakeMaker: '0'
+  Scalar::Util: '0'
   Test::More: '0'
 configure_requires:
   ExtUtils::MakeMaker: '6.64'
@@ -27,6 +28,7 @@ requires:
   List::MoreUtils: '0'
   POSIX: '0'
   Perl::OSType: '0'
+  Scalar::Util: '0'
   Storable: '0'
   String::Util: '0'
   Sub::Name: '0'

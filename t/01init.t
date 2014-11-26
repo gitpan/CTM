@@ -1,4 +1,3 @@
-#!/usr/bin/perl
 #------------------------------------------------------------------------------------------------------
 # OBJET : Test pour CTM::ReadEM. Instanciation de la classe CTM::ReadEM
 # APPLICATION : Control-M
@@ -16,14 +15,18 @@
 use strict;
 use warnings;
 
-use Test::More tests => 3;
+use Test::More tests => 6;
+
+use Scalar::Util qw/
+    blessed
+/;
 
 #---> ** section principale **
 
-my $session;
+my ($emSession, $serverSession);
 
 my %params = (
-    ctmEMVersion => 7,
+    version => 7,
     DBMSType => 'Pg',
     DBMSAddress => '127.0.0.1',
     DBMSPort => 5432,
@@ -33,15 +36,23 @@ my %params = (
 );
 
 BEGIN {
-    use_ok('CTM::ReadEM', ':all');
+    use_ok('CTM::ReadEM', ':allFunctions');
+    use_ok('CTM::ReadServer', ':allFunctions');
 }
 
 eval {
-    $session = CTM::ReadEM->new(%params);
+    $emSession = CTM::ReadEM->new(%params);
 };
 
-ok( ! $@ && defined $session && ref $session eq 'CTM::ReadEM', 'eval { CTM::ReadEM->new(%params) }; ! $@ && defined $session && ref $session eq \'CTM::ReadEM\';');
-ok(getNbSessionsCreated() == 1, 'getNbSessionsCreated() == 1;');
+ok( ! $@ && blessed($emSession) eq 'CTM::ReadEM' , 'eval { CTM::ReadEM->new(%params) }; ! $@ && blessed($emSession) eq \'CTM::ReadEM\';');
+ok(getNbEMSessionsCreated() == 1, 'getNbEMSessionsCreated() == 1;');
+
+eval {
+    $serverSession = CTM::ReadServer->new(%params);
+};
+
+ok( ! $@ && blessed($serverSession) eq 'CTM::ReadServer', 'eval { CTM::ReadServer->new(%params) }; ! $@ && blessed($serverSession) eq \'CTM::ReadServer\';');
+ok(getNbServerSessionsCreated() == 1, 'getNbServerSessionsCreated() == 1;');
 
 #-> END
 

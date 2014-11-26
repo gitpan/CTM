@@ -32,7 +32,7 @@ use Hash::Util qw/
 
 #----> ** variables de classe **
 
-our $VERSION = 0.18;
+our $VERSION = 0.181;
 
 #----> ** methodes publiques **
 
@@ -61,7 +61,7 @@ CTM::ReadEM::WorkOnComponents
 =head1 SYNOPSIS
 
 Module du constructeur C<CTM::ReadEM::workOnComponents()>.
-Pour plus de details, voir la documention POD de C<CTM::ReadEM>.
+Pour plus de details, voir la documention POD de C<CTM>.
 
 =head1 DEPENDANCES DIRECTES
 

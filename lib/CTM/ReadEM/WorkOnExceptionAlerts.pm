@@ -31,31 +31,37 @@ use Hash::Util qw/
 
 #----> ** variables de classe **
 
-our $VERSION = 0.18;
+our $VERSION = 0.181;
 
 #----> ** methodes publiques **
 
 sub resetAndRefresh {
-    return shift->SUPER::_resetAndRefresh(CTM::Base::_CLASS_INFOS->{GASExceptionAlerts}->{workMethod});
+    return shift->SUPER::_resetAndRefresh(CTM::Base::_exceptionAlertsWorkMethod);
 }
 
 sub handle {
-    return shift->SUPER::_setSerials((caller 0)[3], "UPDATE exception_alerts SET status = '2'", @_);
+    return shift->SUPER::_setSerials((caller 0)[3], "UPDATE exception_alerts SET status = '2'", {
+        'status' => 2
+    },  @_);
 }
 
 sub unhandle {
-    return shift->SUPER::_setSerials((caller 0)[3], "UPDATE exception_alerts SET status = '1'", @_);
+    return shift->SUPER::_setSerials((caller 0)[3], "UPDATE exception_alerts SET status = '1'", {
+        'status' => 1
+    }, @_);
 }
 
 sub detete {
-    return shift->SUPER::_setSerials((caller 0)[3], 'DELETE FROM exception_alerts', @_);
+    return shift->SUPER::_setSerials((caller 0)[3], 'DELETE FROM exception_alerts', {}, @_);
 }
 
 sub setNote {
     my ($self, $note, $serialID) = @_;
     my $subName = (caller 0)[3];
     croak(CTM::Base::_myErrorMessage($subName, CTM::Base::_myUsageMessage('$obj->' . $subName, '$definedNote'))) unless (defined $note);
-    return shift->SUPER::_setSerials($subName, "UPDATE exception_alerts SET note = '" . $note . "'", $serialID);
+    return shift->SUPER::_setSerials($subName, "UPDATE exception_alerts SET note = '" . $note . "'", {
+        'note' => $note
+    }, $serialID);
 }
 
 #-> Perl BuiltIn
@@ -83,7 +89,7 @@ CTM::ReadEM::WorkOnExceptionAlerts
 =head1 SYNOPSIS
 
 Module du constructeur C<CTM::ReadEM::workOnExceptionAlerts()>.
-Pour plus de details, voir la documention POD de C<CTM::ReadEM>.
+Pour plus de details, voir la documention POD de C<CTM>.
 
 =head1 DEPENDANCES DIRECTES
 

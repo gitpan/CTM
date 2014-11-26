@@ -20,73 +20,34 @@ use strict;
 use warnings;
 
 use constant {
-    _CLASS_INFOS => {
-        common => {
-            rootClass => {
-                name => 'CTM::ReadEM',
-                propertyName => '_CTM::ReadEM'
-            },
-            baseClass => {
-                name => 'CTM::Base'
-            },
-            baseSubClass => {
-                name => 'CTM::Base::SubClass'
-            },
-            objectProperties => {
-                verbose => {
-                    name => 'verbose'
-                },
-                working => {
-                    name => '_working'
-                },
-                errors => {
-                    name => '_errors'
-                },
-                DBI => {
-                    name => '_DBI'
-                },
-                sessionIsConnected => {
-                    name => '_sessionIsConnected'
-                },
-                parameters => {
-                    name => '_params'
-                },
-                subClassDatas => {
-                    name => '_datas'
-                }
-            }
-        },
-        rootClass => {
-            classProperties => {
-                nbSessionsInstanced => {
-                    name => 'nbSessionsInstanced'
-                },
-                nbSessionsConnected => {
-                    name => 'nbSessionsConnected'
-                }
-            }
-        },
-        BIMCurrentBIMServices => {
-            moduleLastName => 'WorkOnCurrentBIMServices',
-            baseMethod => 'getCurrentBIMServices',
-            workMethod => 'workOnCurrentBIMServices'
-        },
-        GASAlarms => {
-            moduleLastName => 'WorkOnAlarms',
-            baseMethod => 'getAlarms',
-            workMethod => 'workOnAlarms'
-        },
-        GASExceptionAlerts => {
-            moduleLastName => 'WorkOnExceptionAlerts',
-            baseMethod => 'getExceptionAlerts',
-            workMethod => 'workOnExceptionAlerts'
-        },
-        CMComponents => {
-            moduleLastName => 'WorkOnComponents',
-            baseMethod => 'getComponents',
-            workMethod => 'workOnComponents'
-        }
-    }
+    _baseClass => 'CTM::Base',
+    _baseMainClass => 'CTM::Base::MainClass',
+    _baseSubClass => 'CTM::Base::SubClass',
+    _rootClassEM => 'CTM::ReadEM',
+    _rootClassEMPrivate => '_CTM::ReadEM',
+    _rootClassServer => 'CTM::ReadServer',
+    _rootClassServerPrivate => '_CTM::ReadServer',
+    _verboseObjProperty => 'verbose',
+    _workingObjProperty => '_working',
+    _errorsObjProperty => '_errors',
+    _DBIObjProperty => '_DBI',
+    _sessionIsConnectedObjProperty => '_sessionIsConnected',
+    _paramsObjProperty => '_params',
+    _subClassDatasObjProperty => '_datas',
+    _nbSessionsInstancedClassProperty => 'nbSessionsInstanced',
+    _nbSessionsConnectedClassProperty => 'nbSessionsConnected',
+    _currentBIMServicesModuleLastName => 'WorkOnCurrentBIMServices',
+    _currentBIMServicesBaseMethod => 'getCurrentBIMServices',
+    _currentBIMServicesWorkMethod => 'workOnCurrentBIMServices',
+    _alarmsModuleLastName => 'WorkOnAlarms',
+    _alarmsBaseMethod => 'getAlarms',
+    _alarmsWorkMethod => 'workOnAlarms',
+    _exceptionAlertsModuleLastName => 'WorkOnExceptionAlerts',
+    _exceptionAlertsBaseMethod => 'getExceptionAlerts',
+    _exceptionAlertsWorkMethod => 'workOnExceptionAlerts',
+    _componentsModuleLastName => 'WorkOnComponents',
+    _componentsBaseMethod => 'getComponents',
+    _componentsWorkMethod => 'workOnComponents'
 };
 
 use Carp qw/
@@ -102,7 +63,7 @@ use Hash::Util qw/
 
 #----> ** variables de classe **
 
-our $VERSION = 0.18;
+our $VERSION = 0.181;
 our $AUTOLOAD;
 
 #----> ** fonctions privees (mais accessibles a l'utilisateur pour celles qui ne sont pas des references) **
@@ -114,7 +75,7 @@ sub _myErrorMessage($$) {
 
 sub _myUsageMessage($$) {
     my ($namespace, $properties) = @_;
-    return 'USAGE : ' . (split(/::/, $namespace))[-1] . '(' . $properties . ').';
+    return 'USAGE : ' . (split /::/, $namespace)[-1] . '(' . $properties . ').';
 }
 
 #----> ** methodes protegees **
@@ -122,7 +83,7 @@ sub _myUsageMessage($$) {
 sub _invokeVerbose {
     my ($self, $subroutine, $message) = @_;
     if (caller->isa(__PACKAGE__)) {
-        printf STDERR "VERBOSE - '%s()' : %s", $subroutine, $message if ($self->{_CLASS_INFOS->{common}->{objectProperties}->{verbose}->{name}});
+        printf STDERR "VERBOSE - '%s()' : %s", $subroutine, $message if ($self->{+_verboseObjProperty});
     } else {
         carp(_myErrorMessage((caller 0)[3], "tentative d'utilisation d'une methode protegee."));
     }
@@ -148,7 +109,7 @@ sub _setObjProperty {
 sub _isWorking {
     my $self = shift;
     if (caller->isa(__PACKAGE__)) {
-        return $self->{_CLASS_INFOS->{common}->{objectProperties}->{working}->{name}};
+        return $self->{+_workingObjProperty};
     } else {
         carp(_myErrorMessage((caller 0)[3], "tentative d'utilisation d'une methode protegee."));
     }
@@ -158,7 +119,7 @@ sub _isWorking {
 sub _tagAtWork {
     my $self = shift;
     if (caller->isa(__PACKAGE__)) {
-        return $self->_setObjProperty(_CLASS_INFOS->{common}->{objectProperties}->{working}->{name}, 1);
+        return $self->_setObjProperty(+_workingObjProperty, 1);
     } else {
         carp(_myErrorMessage((caller 0)[3], "tentative d'utilisation d'une methode protegee."));
     }
@@ -168,7 +129,7 @@ sub _tagAtWork {
 sub _tagAtRest {
     my $self = shift;
     if (caller->isa(__PACKAGE__)) {
-        return $self->_setObjProperty(_CLASS_INFOS->{common}->{objectProperties}->{working}->{name}, 0);
+        return $self->_setObjProperty(+_workingObjProperty, 0);
     } else {
         carp(_myErrorMessage((caller 0)[3], "tentative d'utilisation d'une methode protegee."));
     }
@@ -178,9 +139,9 @@ sub _tagAtRest {
 sub _addError {
     my ($self, $value) = @_;
     if (caller->isa(__PACKAGE__)) {
-        unlock_value(%{$self}, _CLASS_INFOS->{common}->{objectProperties}->{errors}->{name});
+        unlock_value(%{$self}, _errorsObjProperty);
         unshift @{$self->getErrors()}, $value;
-        lock_value(%{$self}, _CLASS_INFOS->{common}->{objectProperties}->{errors}->{name});
+        lock_value(%{$self}, _errorsObjProperty);
         return 1;
     } else {
         carp(_myErrorMessage((caller 0)[3], "tentative d'utilisation d'une methode protegee."));
@@ -218,7 +179,7 @@ sub setPublicProperty {
 }
 
 sub getErrors {
-    return shift->{_CLASS_INFOS->{common}->{objectProperties}->{errors}->{name}};
+    return shift->{+_errorsObjProperty};
 }
 
 sub getError {
@@ -237,9 +198,9 @@ sub unshiftError {
 
 sub clearErrors {
     my $self = shift;
-    unlock_value(%{$self}, _CLASS_INFOS->{common}->{objectProperties}->{errors}->{name});
-    delete @{$self->getErrors()}[0..@{$self->getErrors()}];
-    lock_value(%{$self}, _CLASS_INFOS->{common}->{objectProperties}->{errors}->{name});
+    unlock_value(%{$self}, _errorsObjProperty);
+    @{$self->getErrors()} = ();
+    lock_value(%{$self}, _errorsObjProperty);
     return 1;
 }
 
@@ -248,7 +209,7 @@ sub clearErrors {
 sub AUTOLOAD {
     my $self = shift;
     if ($AUTOLOAD) {
-        no strict qw/refs/;
+        # no strict qw/refs/;
         (my $called = $AUTOLOAD) =~ s/.*:://;
         croak("'" . $AUTOLOAD . "()' est introuvable.") unless (exists $self->{$called});
         return $self->{$called};
@@ -271,7 +232,7 @@ CTM::Base
 =head1 SYNOPSIS
 
 "Classe abstraite" des modules de C<CTM>.
-Pour plus de details, voir la documention POD de C<CTM::ReadEM>.
+Pour plus de details, voir la documention POD de C<CTM>.
 
 =head1 DEPENDANCES DIRECTES
 

@@ -1,4 +1,4 @@
-#!/usr/bin/perl
+#!/usr/bin/env perl
 #------------------------------------------------------------------------------------------------------
 # OBJET : Exemple d'utilisation de CTM::ReadEM : simple recuperation des services du BIM au format JSON
 # APPLICATION : ControlM
@@ -20,7 +20,7 @@ use Getopt::Long;
 use File::Basename qw/basename/;
 use Try::Tiny;
 use JSON;
-use CTM::ReadEM 0.18, qw/:all/;
+use CTM::ReadEM 0.181, qw/:all/;
 
 #----> ** fonctions **
 
@@ -65,7 +65,7 @@ GetOptions(
 
 try {
     $session = CTM::ReadEM->new(
-        ctmEMVersion => $opts{x},
+        version => $opts{x},
         DBMSType => $opts{T},
         DBMSAddress => $opts{h},
         DBMSPort => $opts{p},
@@ -89,10 +89,12 @@ print "\n" if (defined $opts{V});
 unless (defined ($err = $session->getError())) {
     if (defined $opts{f}) {
         $servicesObj->keepItemsWithAnd({
-            service_name => ['$_', '=~', $opts{f}]
+            service_name => sub {
+                shift =~ $opts{f}
+            }
         });
     }
-    print JSON->new()->pretty()->encode($servicesObj->getItems()) . "\n";
+    print JSON->new()->utf8()->pretty()->encode($servicesObj->getItems()) . "\n";
 } else {
     die $err;
 }

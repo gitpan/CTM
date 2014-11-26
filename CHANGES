@@ -58,7 +58,7 @@
     * 18/07/2014 - ajout du test 01init.t et d'un script d'exemple (get_bim_services.pl).
     * 18/07/2014 - prise en compte du champ 'DAYTIME' avec ses variations (+/-) dans la fonction privee $_calculStartEndDayTimeInPosixTimestamp->() (fonctionnalite experimentale).
     * 20/08/2014 - utilisation des modules List::MoreUtils et Date::Calc.
-* 0.18 (DEV)
+* 0.18 (STABLE)
     * 10/09/2014 - ajout de methodes de 'filtrage' (modification de l'objet) (keepItemsWithAnd() et keepItemsWithOr()) aux modules existants.
     * 12/09/2014 - ajout d'une methode de clonage (clone() a travers $_clone() qui requiert le module Storable) pour les sous-modules de CTM::ReadEM.
     * 13/09/2014 - modification des methodes countItems(), getItems(), getSOAPEnvelope() (modifs + -> generateSOAPEnvelope()), _getFromRequest(), _setSerials() et _refresh() (-> resetAndRefresh()).
@@ -75,13 +75,16 @@
     * 29/10/2014 - suppression de la methode generateSOAPEnvelope(). generateSOAPEnvelope
     * 30/10/2014 - DBMSTimeout -> DBMSConnectTimeout. Passage de la methode protegee _parentClass() en methode publique getParentClass(). getSessionIsConnected() -> getisSessionSeemAlive()
 * 0.181 (A VENIR)
-    * 30/10/2014 - mise a disposition du module CTM, point d'entree de la classe CTM::ReadEM et de la future classe CTM::ReadServer.
-* 0.182 (A VENIR)
-    * xx/xx/xxxx - ajout de methodes et de modules destines au requetage sur le Control-M CM (composants du Control-M EM uniquement).
-    * xx/xx/xxxx - implementation d'un timeout pour les appels DBI (execute(), do(), ...) probablement avec DBIx::Timeout.
+    * 01/11/2014 - mise en place des modules CTM, CTM::Base::MainClass et de la classe CTM::ReadServer (cette derniere ne fait rien pour le moment) et reorganisation partielle du code.
+    * 05/11/2014 - amelioration des methods keep* et des fonctions liees. Voir modifications de la POD.
+    * 05/11/2014 - amelioration de la methode _setSerials et des methodes publiques liees. Ces methodes ont desormais aussi un impact sur les donees de l'objet.
 * 0.19 (A VENIR)
-    * xx/xx/xxxx - utilisation d'un ORM (DBIx::Class ou Rose::DB::Object).
+    * xx/xx/xxxx - ajout de classes/modules CTM::ReadEM::Work*::Items (un objet par item).
+* 0.191 (A VENIR)
+    * xx/xx/xxxx - ajout de methodes et des modules destines au requetage sur le Control-M CM (composants du Control-M EM uniquement).
 * 0.20 (A VENIR)
-    * xx/xx/xxxx - mise a disposition de la classe CTM::ReadServer et de ses sous-modules.
+    * xx/xx/xxxx - utilisation d'un ORM (DBIx::Class ou Rose::DB::Object).
+    * xx/xx/xxxx - implementation d'un timeout pour les appels DBI (execute(), do(), ...) probablement avec DBIx::Timeout.
+    * xx/xx/xxxx - debut de la mise a disposition de la classe CTM::ReadServer et de ses sous-modules.
 * 0.21 (A VENIR)
     * xx/xx/xxxx - refonte via Moose.

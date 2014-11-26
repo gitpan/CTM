@@ -37,7 +37,7 @@ use Hash::Util qw/
 
 #----> ** variables de classe **
 
-our $VERSION = 0.18;
+our $VERSION = 0.181;
 
 #----> ** methodes privees **
 
@@ -59,7 +59,7 @@ my $_getFromRequest = sub {
     $self->_tagAtWork;
     $self->unshiftError();
     if ($self->getParentClass()->isSessionSeemAlive()) {
-        $logID = [keys %{$self->getItems()}] unless (ref $logID eq 'ARRAY' && @{$logID});
+        $logID = [keys %{$self->getItems()}] unless (ref $logID eq 'ARRAY');
         if (@{$logID}) {
             my ($situation, $hashRefPAlertsJobsForServices) = $self->$_getAllViaLogID($sqlRequestSelectFrom, $logID);
             if ($situation) {
@@ -84,7 +84,7 @@ my $_getFromRequest = sub {
 #-> methodes liees aux services
 
 sub resetAndRefresh {
-    return shift->SUPER::_resetAndRefresh(CTM::Base::_CLASS_INFOS->{BIMCurrentBIMServices}->{workMethod});
+    return shift->SUPER::_resetAndRefresh(CTM::Base::_currentBIMServicesWorkMethod);
 }
 
 sub getAlerts {
@@ -120,7 +120,7 @@ CTM::ReadEM::WorkOnCurrentBIMServices
 =head1 SYNOPSIS
 
 Module du constructeur C<CTM::ReadEM::WorkOnCurrentBIMServices()>.
-Pour plus de details, voir la documention POD de CTM::ReadEM.
+Pour plus de details, voir la documention POD de C<CTM>.
 
 =head1 DEPENDANCES DIRECTES
 

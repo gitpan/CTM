@@ -31,46 +31,58 @@ use Hash::Util qw/
 
 #----> ** variables de classe **
 
-our $VERSION = 0.18;
+our $VERSION = 0.181;
 
 #----> ** methodes publiques **
 
 sub resetAndRefresh {
-    return shift->SUPER::_resetAndRefresh(CTM::Base::_CLASS_INFOS->{GASAlarms}->{workMethod});
+    return shift->SUPER::_resetAndRefresh(CTM::Base::_alarmsWorkMethod);
 }
 
 sub notice {
-    return shift->SUPER::_setSerials((caller 0)[3], "UPDATE alarm SET handled = '1'", @_);
+    return shift->SUPER::_setSerials((caller 0)[3], "UPDATE alarm SET handled = '1'", {
+        'handled' => 1
+    }, @_);
 }
 
 sub unnotice {
-    return shift->SUPER::_setSerials((caller 0)[3], "UPDATE alarm SET handled = '0'", @_);
+    return shift->SUPER::_setSerials((caller 0)[3], "UPDATE alarm SET handled = '0'", {
+        'handled' => 0
+    }, @_);
 }
 
 sub handle {
-    return shift->SUPER::_setSerials((caller 0)[3], "UPDATE alarm SET handled = '2'", @_);
+    return shift->SUPER::_setSerials((caller 0)[3], "UPDATE alarm SET handled = '2'", {
+        'handled' => 2
+    }, @_);
 }
 
 sub unhandle {
-    return shift->SUPER::_setSerials((caller 0)[3], "UPDATE alarm SET handled = '1'", @_);
+    return shift->SUPER::_setSerials((caller 0)[3], "UPDATE alarm SET handled = '1'", {
+        'handled' => 1
+    }, @_);
 }
 
 sub delete {
-    return shift->SUPER::_setSerials((caller 0)[3], 'DELETE FROM alarm', @_);
+    return shift->SUPER::_setSerials((caller 0)[3], 'DELETE FROM alarm', {}, @_);
 }
 
 sub setSeverity {
     my ($self, $severity, $serialID) = @_;
     my $subName = (caller 0)[3];
     croak(CTM::Base::_myErrorMessage($subName, CTM::Base::_myUsageMessage('$obj->' . $subName, "'R' || 'U' || 'V'"))) unless ($severity eq 'R' || $severity eq 'U' || $severity eq 'V');
-    return shift->SUPER::_setSerials($subName, "UPDATE alarm SET severity = '" . $severity . "'", $serialID);
+    return shift->SUPER::_setSerials($subName, "UPDATE alarm SET severity = '" . $severity . "'", {
+        'severity' => $severity
+    }, $serialID);
 }
 
 sub setNote {
     my ($self, $notes, $serialID) = @_;
     my $subName = (caller 0)[3];
     croak(CTM::Base::_myErrorMessage($subName, CTM::Base::_myUsageMessage('$obj->' . $subName, '$definedNote'))) unless (defined $notes);
-    return shift->SUPER::_setSerials($subName, "UPDATE alarm SET notes = '" . $notes . "'", $serialID);
+    return shift->SUPER::_setSerials($subName, "UPDATE alarm SET notes = '" . $notes . "'", {
+        'notes' => $notes
+    }, $serialID);
 }
 
 #-> Perl BuiltIn
@@ -98,7 +110,7 @@ CTM::ReadEM::WorkOnAlarms
 =head1 SYNOPSIS
 
 Module du constructeur C<CTM::ReadEM::workOnAlarms()>.
-Pour plus de details, voir la documention POD de C<CTM::ReadEM>.
+Pour plus de details, voir la documention POD de C<CTM>.
 
 =head1 DEPENDANCES DIRECTES
 
